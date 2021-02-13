@@ -1,0 +1,118 @@
+;;-*-Lisp-*-
+(in-package goal)
+
+;; name: gstring.gc
+;; name in dgo: gstring
+;; dgos: KERNEL
+
+;; Note on strings:
+;;  the allocated length does not include an extra byte on the end for the null terminator!
+
+(defmethod length string ((obj string))
+  ; Get the length of a string. Like strlen
+  (let ((str-ptr (-> obj data)))
+    (while (!= 0 (-> str-ptr 0))
+      (set! str-ptr (the (pointer uint8) (&+ str-ptr 1)))
+      )
+    (- (the int str-ptr) (the int (-> obj data)))
+    )
+  )
+
+(defmethod asize-of string ((obj string))
+  ;; get the size in bytes of a string.
+  ;; BUG - string should probably be (-> obj type), not that it matters, I don't think
+  ;;  anybody makes a subclass of string.
+  (+ (-> obj allocated-length) 1 (-> string size))
+  )
+
+(defun copy-string<-string ((dst string) (src string))
+  "Copy data from one string to another, like strcpy"
+  (let ((dst-ptr (-> dst data))
+        (src-ptr (-> src data))
+        )
+    (while (!= 0 (-> src-ptr))
+      (set! (-> dst-ptr) (-> src-ptr))
+      (&+! dst-ptr 1)
+      (&+! src-ptr 1)
+      )
+    )
+  dst
+  )
+
+(defmethod new string ((allocation symbol) (type-to-make type) (size int) (other string))
+  "Create a new string of the given size. If other is not #f, copy data from it."
+  (cond
+    (other
+      (let* ((desired-size (max (length other) size))
+             (new-obj (object-new allocation type-to-make (+ desired-size 1 (-> type-to-make size))))
+             )
+        (set! (-> new-obj allocated-length) size)
+        (copy-string<-string new-obj other)
+        new-obj
+        )
+      )
+    (else
+      (let ((new-obj (object-new allocation type-to-make (+ 1 size (-> type-to-make size)))))
+        (set! (-> new-obj allocated-length) size)
+        new-obj
+        )
+      )
+    )
+  )
+
+;; string=
+;; string-charp=
+;; name=
+;; copyn-string<-charp
+;; string<-charp
+
+(defun charp<-string ((dst (pointer uint8)) (src-string string))
+  "Copy a GOAL string into a character array."
+  (let ((src (-> src-string data)))
+    (while (!= 0 (-> src))
+      (set! (-> dst) (-> src))
+      (&+! dst 1)
+      (&+! src 1)
+      )
+    (set! (-> dst) 0)
+    0
+    )
+  )
+
+;; copy-charp<-charp
+;; cat-string<-string
+;; catn-string<-charp
+;; cat-string<-string_to_charp
+;; append-character-to-string
+;; charp-basename
+
+(defun clear ((a0-0 string))
+  (set! (-> a0-0 data 0) 0) a0-0
+  )
+
+;; string<?
+;; string>?
+;; string<=?
+;; string>=?
+
+(define *string-tmp-str* (new 'global 'string 128 (the string #f)))
+
+;; string-skip-to-char
+;; string-cat-to-last-char
+;; string-skip-whitespace
+;; string-suck-up!
+;; string-strip-leading-whitespace
+;; string-strip-trailing-whitespace
+;; string-strip-whitespace
+;; string-get-arg!!
+;; string->int
+;; string->float
+;; string-get-int32!!
+;; string-get-float!!
+;; string-get-flag!!
+
+(define *debug-draw-pauseable* #f)
+(define *stdcon0* (new 'global 'string 16384 (the string #f)))
+(define *stdcon1* (new 'global 'string 16384 (the string #f)))
+(define *stdcon* *stdcon0*)
+(define *temp-string* (new 'global 'string 256 (the string #f)))

@@ -1,0 +1,238 @@
+{
+	"identity":{
+		"args":["obj"]
+	},
+
+	"1/":{
+		"args":["x"]
+	},
+
+	"+":{
+		"args":["x", "y"]
+	},
+
+	"-":{
+		"args":["x", "y"]
+	},
+
+	"*":{
+		"args":["x", "y"]
+	},
+
+	"/":{
+		"args":["x", "y"]
+	},
+
+	"ash":{
+		"args":["value", "shift-amount"]
+	},
+
+	"mod":{
+		"args":["x", "y"]
+	},
+
+	"rem":{
+		"args":["x", "y"]
+	},
+
+	"abs":{
+		"args":["x"]
+	},
+
+	"min":{
+		"args":["x", "y"]
+	},
+
+	"max":{
+		"args":["x", "y"]
+	},
+
+	"logior":{
+		"args":["x", "y"]
+	},
+
+	"logand":{
+		"args":["x", "y"]
+	},
+
+	"lognor":{
+		"args":["x", "y"]
+	},
+
+	"logxor":{
+		"args":["x", "y"]
+	},
+
+	"lognot":{
+		"args":["x"]
+	},
+
+	"basic-type?":{
+		"args":["obj", "parent-type"],
+		"vars":{"v1-0":"obj-type", "a0-1":"end-type"}
+	},
+
+	"type-type?":{
+		"args":["child-type", "parent-type"],
+		"vars":{"v1-0":"end-type"}
+	},
+
+	"find-parent-method":{
+		"args":["child-type", "method-id"],
+		"vars":{"v0-0":"current-method", "v1-2":"original-method", "v1-5":"unused1"}
+	},
+
+	"ref":{
+		"args":["lst", "index"],
+		"vars":{"v1-0":"count"}
+	},
+
+	"(method 4 pair)": {
+		"vars":{"v0-0":"result", "v1-1":"iter"}
+	},
+
+	"last":{
+		"args":["lst"],
+		"vars":{"v0-0":"iter"}
+	},
+	"member":{
+		"args":["obj", "lst"],
+		"vars":{"v1-0":"iter"}
+	},
+	"nmember":{
+		"args":["obj", "lst"]
+	},
+	"assoc":{
+		"args":["item", "alist"],
+		"vars":{"v1-0":"iter"}
+	},
+	"assoce":{
+		"args":["item", "alist"],
+		"vars":{"v1-0":"iter"}
+	},
+	"nassoc":{
+		"args":["item-name", "alist"],
+		"vars":{"a1-1":"key"}
+	},
+	"nassoce":{
+		"args":["item-name", "alist"],
+		"vars":{"s4-0":"key"}
+	},
+	"append!":{
+		"args":["front", "back"],
+		"vars":{"v1-1":"iter"}
+	},
+	"delete!":{
+		"args":["item", "lst"],
+		"vars":{"a2-0":"iter", "v1-1":"iter-prev"}
+	},
+	"delete-car!":{
+		"args":["item", "lst"],
+		"vars":{"a2-0":"iter", "v1-2":"iter-prev"}
+	},
+	"insert-cons!":{
+		"args":["kv", "alist"],
+		"vars":{"a3-0":"updated-list"}
+	},
+	"sort":{
+		"args":["lst", "compare-func"],
+		"vars":{"s4-0":"unsorted-count", "s3-0":"iter", "s2-0":"first-elt", "s1-0":"seoncd-elt", "v1-1":"compare-result"}
+	},
+	"(method 0 inline-array-class)":{
+		"args":["allocation", "type-to-make", "size"],
+		"vars":{"v0-0":"obj"}
+	},
+	"(method 0 array)":{
+		"args":["allocation", "type-to-make", "content-type", "len"],
+		"vars":{"v0-1":"obj"}
+	},
+
+	"(method 2 array)":{
+		"vars":{"v1-1":"content-type-sym","s5-0":"i","s5-1":"i","s5-2":"i"
+		,"s5-3":"i","s5-4":"i","s5-5":"i","s5-6":"i","s5-7":"i","s5-8":"i",
+	    "s5-9":"i","s5-10":"i","s5-11":"i"}
+	},
+
+	"(method 3 array)":{
+		"vars":{"v1-1":"content-type-sym","s5-0":"i","s5-1":"i","s5-2":"i"
+		,"s5-3":"i","s5-4":"i","s5-5":"i","s5-6":"i","s5-7":"i","s5-8":"i","s5-9":"i","s5-10":"i","s5-11":"i"}
+	},
+
+	"mem-copy!":{
+		"args":["dst", "src", "size"],
+		"vars":{"v0-0":"result", "v1-0":"i"}
+	},
+	"qmem-copy<-!":{
+		"args":["dst", "src", "size"],
+		"vars":{"v0-0":"result", "v1-1":"qwc", "a2-1":"value"}
+	},
+	"qmem-copy->!":{
+		"args":["dst", "src", "size"],
+		"vars":{"v0-0":"result", "v1-1":"qwc", "a0-1":"src-ptr", "a1-1":"dst-ptr", "a2-3":"value"}
+	},
+	"mem-set32!":{
+		"args":["dst", "size", "value"],
+		"vars":{"v0-0":"result", "v1-0":"i"}
+	},
+	"mem-or!":{
+		"args":["dst", "src", "size"],
+		"vars":{"v0-0":"result", "v1-0":"i"}
+	},
+	"fact":{
+		"args":["x"]
+	},
+	"mem-print":{
+		"args":["data", "word-count"],
+		"vars":{"s4-0":"current-qword"}
+	},
+	"print-tree-bitmask":{
+		"args":["bits", "count"],
+		"vars":{"s4-0":"i"}
+	},
+	"valid?":{
+		"args":["obj", "expected-type", "name", "allow-false", "print-dest"],
+		"vars":{"v1-1":"in-goal-mem"}
+	},
+
+	"seek":{
+		"args":["x", "target", "diff"],
+		"vars":{"f2-0":"err"}
+	},
+
+	"lerp":{
+		"args":["minimum", "maximum", "amount"]
+	},
+
+	"lerp-scale":{
+		"args":["min-out", "max-out", "in", "min-in", "max-in"],
+		"vars":{"f0-1":"scale"}
+	},
+
+	"lerp-clamp":{
+		"args":["minimum", "maximum", "amount"]
+	},
+
+	"rand-vu-int-range":{
+		"args":["first", "second"],
+		"vars":{"f0-4":"float-in-range"}
+	},
+
+	"(method 0 bit-array)":{
+		"args":["allocation", "type-to-make", "length"],
+		"vars":{"v0-0":"obj"}
+	},
+
+	"(method 12 bit-array)":{
+		"vars":{"v1-2":"idx"}
+	},
+
+	"box-vector-enside?":{
+		"args":["box", "pt"]
+	},
+
+	"box-vector-inside?":{
+		"args":["box", "pt"]
+	}
+
+
+}
