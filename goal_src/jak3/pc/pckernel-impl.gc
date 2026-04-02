@@ -73,6 +73,9 @@
   (icelandic 19)
   (polish 20)
   (lithuanian 21)
+  (czech 22)
+  (croatian 23)
+  (galician 24)
 
   (custom 999) ;; temp
   )
@@ -355,5 +358,3 @@
     (logclear! (-> *pc-settings* cheats-revealed) (pc-cheats ,@cheats))
     )
   )
-
-

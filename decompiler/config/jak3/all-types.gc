@@ -71,6 +71,18 @@
   (uk-english 11)
   ;; custom
   (finnish 12)
+  (swedish 13)
+  (danish 14)
+  (norwegian 15)
+  (br-portuguese 16)
+  (hungarian 17)
+  (catalan 18)
+  (icelandic 19)
+  (polish 20)
+  (lithuanian 21)
+  (czech 22)
+  (croatian 23)
+  (galician 24)
   )
 
 (defenum language-enum-s32
@@ -75041,5 +75053,3 @@
 (define-extern terraformer-head-advance-launch-script (function none :behavior terraformer-head))
 (define-extern terraformer-head-check-launch-script (function none :behavior terraformer-head))
 (define-extern terraformer-head-target-enable (function symbol none :behavior terraformer-head))
-
-

@@ -130,7 +130,7 @@
   // turn this on if you want extracted level collision to be saved as .obj files in decompiler_out/<game>/collision
   "rip_collision": false,
   // save game textures as .png files to decompiler_out/<game>/textures
-  "save_texture_pngs": false,
+  "save_texture_pngs": true,
 
   // whether or not to dump out streamed audio files to decompiler_out/<game>/audio
   "rip_streamed_audio": false,
@@ -147,8 +147,7 @@
   // set to true to apply patch files
   "apply_patches": true,
   // what to patch an object to and what the patch file is
-  "object_patches": {
-  },
+  "object_patches": {},
   "version_overrides": {
     "ntsc_v1": {},
     "pal": {
