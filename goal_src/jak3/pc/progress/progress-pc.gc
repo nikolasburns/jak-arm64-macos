@@ -605,12 +605,7 @@
            )
      )
     (('graphic-options)
-     (set! (-> this current-options)
-           (if (or (= (scf-get-territory) 1) (and (= *progress-cheat* 'pal) (cpad-hold? 0 l2) (cpad-hold? 0 r2)))
-               *graphic-title-options-pal*
-               *graphic-options-pc*
-               )
-           )
+     (set! (-> this current-options) *graphic-options-pc*)
      )
     (('sound-options)
      (set! (-> this current-options) *sound-options-pc*)
