@@ -3412,7 +3412,11 @@
           (when (and ; (not (gg-node? node))
                      (task-node-open? (the game-task-node i))
                      (!= (-> node description) (the text-id 0))
-                     (= (-> *task-level* task-level-idx) (-> node level)))
+                     ;; small hack for desert-glide: hanga has task-level volcano, but the task node has task-level desert...
+                     (or (and (= (-> level name) 'hanga)
+                              (or (= (the game-task-node i) (game-task-node desert-glide-templetop))
+                                  (= (the game-task-node i) (game-task-node desert-glide-resolution))))
+                         (= (-> *task-level* task-level-idx) (-> node level))))
             (set! (-> info task) (game-task->string (-> node task)))
             (return (lookup-text! *common-text* (-> node description) #f))
             )

@@ -62,12 +62,13 @@ This gives us more freedom to write code how we want.
           (set! (-> *setting-control* user-default dialog-volume) val)))
     (new 'static 'menu-generic-carousel-option
         :name (text-id progress-sound-format)
-        :get-max-size-fn (lambda () 3)
+        :get-max-size-fn (lambda () 2) ; 3
         :get-item-label-fn (lambda ((index int))
           (case index
             ((0) (lookup-text! *common-text* (text-id progress-sound-mono) #f))
             ((1) (lookup-text! *common-text* (text-id progress-sound-stereo) #f))
-            ((2) (lookup-text! *common-text* (text-id progress-sound-surround) #f))))
+            ; ((2) (lookup-text! *common-text* (text-id progress-sound-surround) #f))
+            ))
         :get-item-index-fn (lambda () (-> *setting-control* user-default stereo-mode))
         :on-confirm (lambda ((index int) (the-progress progress)) (set! (-> *setting-control* user-default stereo-mode) index)))))
 

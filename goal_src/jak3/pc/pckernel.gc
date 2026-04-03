@@ -302,6 +302,20 @@
   "are we in an actual cutscene and should letterbox the view?"
   (and (!= #f *scene-player*) (nonzero? movie?) (movie?)))
 
+(defun print-rpc-info ((this discord-info) (buf object))
+  (format buf "[~8x] discord-info~%" this)
+  (format buf "~Torb-count: ~f~%" (-> this orb-count))
+  (format buf "~Tgem-count: ~f~%" (-> this gem-count))
+  (format buf "~Tdeath-count: ~f~%" (-> this death-count))
+  (format buf "~Tlevel: ~A~%" (-> this level))
+  (format buf "~Tstatus: ~S~%" (-> this status))
+  (format buf "~Ttask: ~S~%" (-> this task))
+  (format buf "~Tfocus: (~S)~%" (begin (clear *temp-string*) (bit-enum->string focus-status (-> this focus-status) *temp-string*) *temp-string*))
+  (format buf "~Tgun: (~S)~%" (begin (clear *temp-string*) (string-format (pickup-type->string (the pickup-type (-> this active-gun)))) *temp-string*))
+  (format buf "~Tvehicle: ~S~%" (enum->string vehicle-type (-> this current-vehicle)))
+  this
+  )
+
 (defmethod update-discord-rpc ((obj pc-settings-jak3))
   "update discord rpc module"
   (let ((info (new 'stack 'discord-info)))
@@ -326,6 +340,8 @@
     (set! (-> info percent-complete) (calculate-percentage *game-info*))
     (set! (-> info focus-status) (if *target* (-> *target* focus-status) 0))
     (set! (-> info current-vehicle) (the int (-> *game-info* current-vehicle)))
+    (set! (-> info active-gun) (if *target* (the int (-> *target* gun using-gun-type)) 0))
+    ; (when *debug-segment* (print-rpc-info info *stdcon*))
     ;; TODO - update to new with-profiler syntax
     (pc-discord-rpc-update info)
     )

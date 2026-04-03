@@ -35,8 +35,9 @@ const std::map<std::string, std::string> level_names = {
 
 // for remapping sub-level names to the matching one in level_names
 std::map<std::string, std::string> level_name_remap = {
-    {"introcst", "intro"}, {"templex", "temple"}, {"combx", "comb"},      {"volcanox", "volcano"},
-    {"railx", "rail"},     {"railb2", "rail"},    {"rubblea2", "rubble"}, {"wasstada", "wasstad"},
+    {"introcst", "intro"},   {"templex", "temple"},  {"combx", "comb"},  {"volcanox", "volcano"},
+    {"volcanoa", "volcano"}, {"railx", "rail"},      {"railb2", "rail"}, {"rubblea2", "rubble"},
+    {"wasstada", "wasstad"}, {"lfacrm2", "factory"},
 };
 
 const std::map<std::string, std::pair<char, char>> level_remap_hack = {
