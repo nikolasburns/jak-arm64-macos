@@ -58,15 +58,16 @@ void update_discord_rpc(u32 discord_info) {
       if (strcmp(task, "unknown") != 0) {
         strcpy(large_image_key, task);
       } else {
+        auto base_level_name = get_base_level_name(level_name_remap, level);
         // if we are in an outdoors level, use the picture for the corresponding time of day
-        if (!indoors(indoor_levels, level)) {
+        if (!indoors(indoor_levels, base_level_name.c_str())) {
           char level_with_tod[128] = {};
-          strcpy(level_with_tod, get_base_level_name(level_name_remap, level));
+          strcpy(level_with_tod, base_level_name.c_str());
           strcat(level_with_tod, "-");
           strcat(level_with_tod, time_of_day_str(time));
           strcpy(large_image_key, level_with_tod);
         } else {
-          strcpy(large_image_key, level);
+          strcpy(large_image_key, base_level_name.c_str());
         }
       }
       strcpy(large_image_text, full_level_name);
