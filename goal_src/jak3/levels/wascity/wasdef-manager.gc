@@ -2342,18 +2342,25 @@
        )
      )
     (('event-over)
-     ;; og:preserve-this handle->process nonsense
-     (let ((makers (search-process-tree *active-pool* (lambda ((arg0 process-tree)) (type? arg0 maker))))
-           (flyer-shots (search-process-tree *active-pool* (lambda ((arg0 process-tree)) (type? arg0 dm-flyer-shot))))
-           (grenades (search-process-tree *active-pool* (lambda ((arg0 process-tree)) (type? arg0 maker-grenade))))
-           )
-       (and
-         (not (process->handle makers))
-         (not (process->handle flyer-shots))
-         (not (process->handle grenades))
-         (-> this completed)
-         )
-       )
+     (and (not (handle->process
+                 (process->handle (search-process-tree *active-pool* (lambda ((arg0 process-tree)) (type? arg0 maker))))
+                 )
+               )
+          (not (handle->process
+                 (process->handle
+                   (search-process-tree *active-pool* (lambda ((arg0 process-tree)) (type? arg0 dm-flyer-shot)))
+                   )
+                 )
+               )
+          (and (not (handle->process
+                      (process->handle
+                        (search-process-tree *active-pool* (lambda ((arg0 process-tree)) (type? arg0 maker-grenade)))
+                        )
+                      )
+                    )
+               (-> this completed)
+               )
+          )
      )
     (('fail)
      ((method-of-type task-manager taskman-event-handler) this arg0 arg1 arg2 arg3)

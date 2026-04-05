@@ -10309,6 +10309,7 @@
   (progress-controller-options-enable-trigger-effects #x134c)
   (progress-misc-fix-projectile-focus #x134d)
   (progress-controller-options-pacman-dpad #x134e)
+  (progress-controller-options-analog-sensitivity #x134f)
   )
 ;; ---text-h:text-id
 
