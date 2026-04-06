@@ -114,7 +114,7 @@
 
 ;; DECOMP BEGINS
 
-(defun-debug game-save-elt->string ((arg0 game-save-elt))
+(defun game-save-elt->string ((arg0 game-save-elt))
   (case arg0
     (((game-save-elt video-mode))
      "video-mode"
