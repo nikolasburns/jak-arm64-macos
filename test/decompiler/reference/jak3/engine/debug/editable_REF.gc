@@ -1,15 +1,10 @@
 ;;-*-Lisp-*-
 (in-package goal)
 
-;; name: editable.gc
-;; name in dgo: editable
-;; dgos: GAME
-
-;; DECOMP BEGINS
-
 ;; this file is debug only
 (declare-file (debug))
 
+;; definition for function common-owner
 ;; WARN: Return type mismatch symbol vs object.
 (defun common-owner ((arg0 editable) (arg1 editable))
   (let* ((v1-0 (the-as object (-> arg0 owner)))
@@ -34,6 +29,7 @@
   #f
   )
 
+;; definition for method 0 of type editable-region
 (defmethod new editable-region ((allocation symbol) (type-to-make type))
   (let ((gp-0 (object-new allocation type-to-make (the-as int (-> type-to-make size)))))
     (set! (-> gp-0 changed) #t)
@@ -59,11 +55,14 @@
     )
   )
 
+;; definition for method 2 of type editable-region
 (defmethod print ((this editable-region))
   (format #t "#<~A region-~D ~A ~A @ #x~X>" (-> this type) (-> this id) (-> this level) (-> this tree) this)
   this
   )
 
+;; definition for method 10 of type editable-region
+;; INFO: Used lq/sq
 (defmethod editable-region-method-10 ((this editable-region) (arg0 int))
   (local-vars (sv-16 string) (sv-32 string))
   (when (nonzero? (-> this id))
@@ -141,6 +140,7 @@
   #f
   )
 
+;; definition for method 9 of type editable-region
 (defmethod save-region! ((this editable-region) (arg0 editable-array) (arg1 int) (arg2 int))
   (local-vars (v0-0 symbol))
   (set! v0-0
@@ -320,6 +320,8 @@
   v0-0
   )
 
+;; definition for method 11 of type editable-region
+;; WARN: Return type mismatch int vs none.
 (defmethod print-region-info ((this editable-region) (arg0 vector) (arg1 int))
   (local-vars (sv-32 vector2h))
   (set! sv-32 (new 'stack 'vector2h))
@@ -374,6 +376,7 @@
   (none)
   )
 
+;; definition for method 12 of type editable-region
 ;; WARN: Return type mismatch int vs editable-filter.
 (defmethod editable-region-method-12 ((this editable-region))
   (let* ((s5-0 0)
@@ -448,10 +451,13 @@
     )
   )
 
+;; definition for method 25 of type editable
 (defmethod editable-method-25 ((this editable))
   #t
   )
 
+;; definition for method 30 of type editable
+;; WARN: Return type mismatch int vs none.
 (defmethod editable-method-30 ((this editable) (arg0 editable-flag))
   (let* ((s5-0 (the-as object (-> this owner)))
          (a0-1 (-> (the-as pair s5-0) car))
@@ -466,6 +472,8 @@
   (none)
   )
 
+;; definition for method 31 of type editable
+;; WARN: Return type mismatch int vs none.
 (defmethod editable-method-31 ((this editable) (arg0 editable-flag))
   (let* ((s5-0 (the-as object (-> this owner)))
          (a0-1 (-> (the-as pair s5-0) car))
@@ -480,6 +488,8 @@
   (none)
   )
 
+;; definition for method 23 of type editable
+;; WARN: Return type mismatch int vs none.
 (defmethod change-region! ((this editable) (arg0 editable-region))
   (when (not (and (-> this region) (-> this region locked)))
     (if arg0
@@ -495,6 +505,7 @@
   (none)
   )
 
+;; definition for method 9 of type editable
 ;; WARN: Return type mismatch int vs rgba.
 (defmethod get-color ((this editable))
   (the-as rgba (cond
@@ -528,6 +539,8 @@
           )
   )
 
+;; definition for method 10 of type editable
+;; WARN: Return type mismatch int vs none.
 (defmethod editable-method-10 ((this editable))
   (when (logtest? (-> this flags) (editable-flag selected))
     (let ((s5-0 (new 'stack-no-clear 'vector)))
@@ -552,6 +565,8 @@
   (none)
   )
 
+;; definition for method 12 of type editable
+;; WARN: Return type mismatch int vs none.
 (defmethod set-selected! ((this editable) (arg0 symbol))
   (case arg0
     (('toggle)
@@ -568,14 +583,18 @@
   (none)
   )
 
+;; definition for method 13 of type editable
 (defmethod editable-method-13 ((this editable) (arg0 vector))
   -1.0
   )
 
+;; definition for method 14 of type editable
 (defmethod editable-method-14 ((this editable) (arg0 vector) (arg1 vector))
   -1.0
   )
 
+;; definition for method 22 of type editable
+;; WARN: Return type mismatch int vs none.
 (defmethod editable-method-22 ((this editable) (arg0 vector) (arg1 vector) (arg2 vector) (arg3 vector))
   (local-vars (sv-48 vector) (sv-52 vector))
   (set! sv-48 (new 'stack-no-clear 'vector))
@@ -594,6 +613,8 @@
   (none)
   )
 
+;; definition for method 11 of type editable
+;; INFO: Used lq/sq
 (defmethod editable-method-11 ((this editable) (arg0 vector))
   (with-pp
     (let ((s5-0 (new 'stack 'collide-query)))
@@ -620,58 +641,79 @@
     )
   )
 
+;; definition for method 26 of type editable
+;; WARN: Return type mismatch int vs none.
 (defmethod editable-method-26 ((this editable))
   0
   (none)
   )
 
+;; definition for method 19 of type editable
+;; WARN: Return type mismatch int vs none.
 (defmethod editable-method-19 ((this editable) (arg0 vector))
   0
   (none)
   )
 
+;; definition for method 24 of type editable
 (defmethod editable-method-24 ((this editable) (arg0 editable-array) (arg1 int) (arg2 int))
   #t
   )
 
+;; definition for method 17 of type editable
+;; WARN: Return type mismatch int vs none.
 (defmethod editable-method-17 ((this editable) (arg0 vector) (arg1 editable-flag))
   0
   (none)
   )
 
+;; definition for method 18 of type editable
+;; WARN: Return type mismatch int vs none.
 (defmethod editable-method-18 ((this editable) (arg0 vector) (arg1 int))
   0
   (none)
   )
 
+;; definition for method 20 of type editable
+;; WARN: Return type mismatch int vs none.
 (defmethod editable-method-20 ((this editable) (arg0 vector) (arg1 matrix))
   0
   (none)
   )
 
+;; definition for method 15 of type editable
 (defmethod editable-method-15 ((this editable))
   *null-vector*
   )
 
+;; definition for method 16 of type editable
 (defmethod editable-method-16 ((this editable))
   0.0
   )
 
+;; definition for method 21 of type editable
+;; WARN: Return type mismatch int vs none.
 (defmethod editable-method-21 ((this editable) (arg0 vector))
   0
   (none)
   )
 
+;; definition for method 35 of type editable
+;; WARN: Return type mismatch int vs none.
 (defmethod editable-method-35 ((this editable) (arg0 vector))
   0
   (none)
   )
 
+;; definition for method 28 of type editable
+;; WARN: Return type mismatch int vs none.
 (defmethod editable-method-28 ((this editable) (arg0 editable) (arg1 editable))
   0
   (none)
   )
 
+;; definition for method 27 of type editable
+;; WARN: Return type mismatch int vs none.
 (defmethod delete! ((this editable) (arg0 editable))
   (let ((v1-0 (-> this region)))
     (if v1-0
@@ -692,6 +734,7 @@
   (none)
   )
 
+;; definition for method 29 of type editable
 (defmethod copy-into-editable-array! ((this editable) (arg0 editable-array))
   (local-vars (s4-0 editable))
   (let ((v1-0 0))
@@ -734,14 +777,17 @@
   s4-0
   )
 
+;; definition for method 32 of type editable
 (defmethod get-null-vec ((this editable))
   *null-vector*
   )
 
+;; definition for method 33 of type editable
 (defmethod get-null-vec2 ((this editable) (arg0 vector))
   *null-vector*
   )
 
+;; definition for method 34 of type editable
 (defmethod get-level-offset ((this editable) (arg0 editable-array))
   (local-vars (sv-16 sql-result))
   (when (!= (-> this region level) (-> arg0 level))
@@ -769,6 +815,7 @@
   (-> arg0 level-offset)
   )
 
+;; definition for method 2 of type editable-point
 (defmethod print ((this editable-point))
   (format
     #t
@@ -787,6 +834,8 @@
   this
   )
 
+;; definition for method 30 of type editable-point
+;; WARN: Return type mismatch int vs none.
 ;; WARN: Function (method 30 editable-point) has a return type of none, but the expression builder found a return statement.
 (defmethod editable-method-30 ((this editable-point) (arg0 editable-flag))
   (if (logtest? arg0 (editable-flag no-update))
@@ -837,6 +886,8 @@
   (none)
   )
 
+;; definition for method 17 of type editable-point
+;; WARN: Return type mismatch int vs none.
 (defmethod editable-method-17 ((this editable-point) (arg0 vector) (arg1 editable-flag))
   (let ((v1-0 (-> this region)))
     (if v1-0
@@ -850,6 +901,8 @@
   (none)
   )
 
+;; definition for method 18 of type editable-point
+;; WARN: Return type mismatch int vs none.
 (defmethod editable-method-18 ((this editable-point) (arg0 vector) (arg1 int))
   (let ((v1-0 (-> this region)))
     (if v1-0
@@ -871,10 +924,13 @@
   (none)
   )
 
+;; definition for method 15 of type editable-point
 (defmethod editable-method-15 ((this editable-point))
   (-> this trans)
   )
 
+;; definition for method 20 of type editable-point
+;; WARN: Return type mismatch int vs none.
 (defmethod editable-method-20 ((this editable-point) (arg0 vector) (arg1 matrix))
   (let ((v1-0 (-> this region)))
     (if v1-0
@@ -890,6 +946,7 @@
   (none)
   )
 
+;; definition for method 10 of type editable-point
 (defmethod editable-method-10 ((this editable-point))
   (let* ((f0-1 (- (vector-vector-distance (math-camera-pos) (-> this trans)) (-> this radius)))
          (s2-0 (cond
@@ -917,6 +974,8 @@
   (none)
   )
 
+;; definition for method 13 of type editable-point
+;; INFO: Used lq/sq
 (defmethod editable-method-13 ((this editable-point) (arg0 vector))
   (let ((a0-1 (new 'stack-no-clear 'sphere))
         (s5-0 (new 'stack-no-clear 'vector))
@@ -935,6 +994,8 @@
   -1.0
   )
 
+;; definition for method 14 of type editable-point
+;; INFO: Used lq/sq
 (defmethod editable-method-14 ((this editable-point) (arg0 vector) (arg1 vector))
   (let ((a0-1 (new 'stack-no-clear 'sphere)))
     (new 'stack-no-clear 'vector)
@@ -1058,6 +1119,8 @@
   -1.0
   )
 
+;; definition for method 21 of type editable-point
+;; WARN: Return type mismatch int vs none.
 (defmethod editable-method-21 ((this editable-point) (arg0 vector))
   (let ((v1-0 (-> this region)))
     (if v1-0
@@ -1073,6 +1136,7 @@
   (none)
   )
 
+;; definition for method 24 of type editable-point
 (defmethod editable-method-24 ((this editable-point) (arg0 editable-array) (arg1 int) (arg2 int))
   (case arg1
     ((2)
@@ -1101,6 +1165,8 @@
     )
   )
 
+;; definition for method 19 of type editable-sphere
+;; WARN: Return type mismatch int vs none.
 (defmethod editable-method-19 ((this editable-sphere) (arg0 vector))
   (let ((v1-0 (-> this region)))
     (if v1-0
@@ -1120,11 +1186,13 @@
   (none)
   )
 
+;; definition for method 16 of type editable-sphere
 ;; WARN: Return type mismatch meters vs float.
 (defmethod editable-method-16 ((this editable-sphere))
   (the-as float (-> this radius))
   )
 
+;; definition for method 24 of type editable-sphere
 (defmethod editable-method-24 ((this editable-sphere) (arg0 editable-array) (arg1 int) (arg2 int))
   (let ((s4-0 (get-level-offset this arg0))
         (s5-0 (clear *temp-string*))
@@ -1142,6 +1210,7 @@
     )
   )
 
+;; definition for method 24 of type editable-sample
 (defmethod editable-method-24 ((this editable-sample) (arg0 editable-array) (arg1 int) (arg2 int))
   (let ((s5-0 (clear *temp-string*)))
     (format
@@ -1161,6 +1230,7 @@
     )
   )
 
+;; definition for method 2 of type editable-light
 (defmethod print ((this editable-light))
   (format
     #t
@@ -1179,6 +1249,8 @@
   this
   )
 
+;; definition for method 25 of type editable-light
+;; INFO: Used lq/sq
 (defmethod editable-method-25 ((this editable-light))
   (let ((v1-0 *light-hash*))
     (let* ((a2-0 (-> v1-0 num-lights))
@@ -1222,6 +1294,8 @@
   #t
   )
 
+;; definition for function update-light-sphere-from-editable-light
+;; INFO: Used lq/sq
 ;; WARN: Return type mismatch int vs object.
 (defun update-light-sphere-from-editable-light ((arg0 editable-light))
   (let ((v1-0 (lookup-light-sphere-by-name (-> arg0 name) *light-hash*)))
@@ -1265,6 +1339,8 @@
     )
   )
 
+;; definition for method 19 of type editable-light
+;; WARN: Return type mismatch int vs none.
 (defmethod editable-method-19 ((this editable-light) (arg0 vector))
   (let ((v1-0 (-> this region)))
     (if v1-0
@@ -1285,6 +1361,8 @@
   (none)
   )
 
+;; definition for method 17 of type editable-light
+;; WARN: Return type mismatch int vs none.
 (defmethod editable-method-17 ((this editable-light) (arg0 vector) (arg1 editable-flag))
   (let ((v1-0 (-> this region)))
     (if v1-0
@@ -1299,6 +1377,8 @@
   (none)
   )
 
+;; definition for method 27 of type editable-light
+;; WARN: Return type mismatch int vs none.
 ;; WARN: Function (method 27 editable-light) has a return type of none, but the expression builder found a return statement.
 (defmethod delete! ((this editable-light) (arg0 editable))
   (call-parent-method this arg0)
@@ -1317,6 +1397,7 @@
   (none)
   )
 
+;; definition for method 24 of type editable-light
 (defmethod editable-method-24 ((this editable-light) (arg0 editable-array) (arg1 int) (arg2 int))
   (cond
     ((logtest? (-> this flags) (editable-flag changed))
@@ -1402,6 +1483,7 @@
     )
   )
 
+;; definition for method 10 of type editable-light
 (defmethod editable-method-10 ((this editable-light))
   (if (!= (-> this direction w) 0.0)
       (add-debug-vector
@@ -1426,11 +1508,14 @@
   (none)
   )
 
+;; definition for method 32 of type editable-entity
 ;; WARN: Return type mismatch euler-angles vs vector.
 (defmethod get-null-vec ((this editable-entity))
   (the-as vector (-> this angles))
   )
 
+;; definition for method 33 of type editable-entity
+;; INFO: Used lq/sq
 ;; WARN: Return type mismatch euler-angles vs vector.
 (defmethod get-null-vec2 ((this editable-entity) (arg0 vector))
   (let ((v1-0 (-> this region)))
@@ -1444,6 +1529,8 @@
   (the-as vector (-> this angles))
   )
 
+;; definition for method 35 of type editable-entity
+;; WARN: Return type mismatch int vs none.
 (defmethod editable-method-35 ((this editable-entity) (arg0 vector))
   (let ((s4-0 (new 'stack-no-clear 'matrix)))
     (let ((s5-0 (new 'stack-no-clear 'quaternion)))
@@ -1459,6 +1546,9 @@
   (none)
   )
 
+;; definition for method 21 of type editable-entity
+;; INFO: Used lq/sq
+;; WARN: Return type mismatch int vs none.
 (defmethod editable-method-21 ((this editable-entity) (arg0 vector))
   (let ((v1-0 (-> this region)))
     (if v1-0
@@ -1495,11 +1585,14 @@
   (none)
   )
 
+;; definition for method 30 of type editable-entity
 (defmethod editable-method-30 ((this editable-entity) (arg0 editable-flag))
   (editable-entity-method-36 this)
   (none)
   )
 
+;; definition for method 27 of type editable-entity
+;; WARN: Return type mismatch int vs none.
 ;; WARN: Function (method 27 editable-entity) has a return type of none, but the expression builder found a return statement.
 (defmethod delete! ((this editable-entity) (arg0 editable))
   (call-parent-method this arg0)
@@ -1518,6 +1611,7 @@
   (none)
   )
 
+;; definition for method 29 of type editable-entity
 (defmethod copy-into-editable-array! ((this editable-entity) (arg0 editable-array))
   (let ((gp-1 (call-parent-method this arg0)))
     (copy-string<-string (-> gp-1 name) (-> this name))
@@ -1536,18 +1630,21 @@
     )
   )
 
+;; definition for method 17 of type editable-entity
 (defmethod editable-method-17 ((this editable-entity) (arg0 vector) (arg1 editable-flag))
   (call-parent-method this arg0 arg1)
   (editable-entity-method-36 this)
   (none)
   )
 
+;; definition for method 18 of type editable-entity
 (defmethod editable-method-18 ((this editable-entity) (arg0 vector) (arg1 int))
   (call-parent-method this arg0 arg1)
   (editable-entity-method-36 this)
   (none)
   )
 
+;; definition for method 20 of type editable-entity
 (defmethod editable-method-20 ((this editable-entity) (arg0 vector) (arg1 matrix))
   (call-parent-method this arg0 arg1)
   (let ((s4-1 (new 'stack-no-clear 'matrix)))
@@ -1559,6 +1656,7 @@
   (none)
   )
 
+;; definition for method 9 of type editable-entity
 ;; WARN: Return type mismatch int vs rgba.
 (defmethod get-color ((this editable-entity))
   (the-as rgba (cond
@@ -1601,6 +1699,9 @@
           )
   )
 
+;; definition for method 36 of type editable-entity
+;; INFO: Used lq/sq
+;; WARN: Return type mismatch int vs none.
 (defmethod editable-entity-method-36 ((this editable-entity))
   (with-pp
     (let ((s5-0 (clear *temp-string*)))
@@ -1629,6 +1730,7 @@
     )
   )
 
+;; definition for method 24 of type editable-entity
 (defmethod editable-method-24 ((this editable-entity) (arg0 editable-array) (arg1 int) (arg2 int))
   (if (string= "entity" (-> this name))
       (return #t)
@@ -1712,6 +1814,8 @@
     )
   )
 
+;; definition for method 15 of type editable-face
+;; INFO: Used lq/sq
 (defmethod editable-method-15 ((this editable-face))
   "The center of the obj."
   (cond
@@ -1738,6 +1842,7 @@
     )
   )
 
+;; definition for method 24 of type editable-face
 (defmethod editable-method-24 ((this editable-face) (arg0 editable-array) (arg1 int) (arg2 int))
   (let ((s4-0 (clear *temp-string*)))
     (format s4-0 "insert into region_face set kind='face',region_id=~D" (-> this region id))
@@ -1757,6 +1862,7 @@
   #t
   )
 
+;; definition for method 27 of type editable-face
 (defmethod delete! ((this editable-face) (arg0 editable))
   (dotimes (s4-0 (-> this length))
     (let ((s3-0 (-> this vertex s4-0)))
@@ -1767,6 +1873,7 @@
   (none)
   )
 
+;; definition for method 28 of type editable-face
 (defmethod editable-method-28 ((this editable-face) (arg0 editable) (arg1 editable))
   (-> this length)
   (countdown (v1-1 (-> this length))
@@ -1789,6 +1896,7 @@
   (none)
   )
 
+;; definition for method 29 of type editable-face
 (defmethod copy-into-editable-array! ((this editable-face) (arg0 editable-array))
   (let ((gp-1 (call-parent-method this arg0)))
     (dotimes (s4-0 (-> gp-1 length))
@@ -1799,6 +1907,8 @@
     )
   )
 
+;; definition for method 26 of type editable-face
+;; WARN: Return type mismatch int vs none.
 (defmethod editable-method-26 ((this editable-face))
   (logxor! (-> this flags) (editable-flag orient))
   (editable-face-method-37 this (-> this normal))
@@ -1808,6 +1918,8 @@
   (none)
   )
 
+;; definition for method 36 of type editable-face
+;; INFO: Used lq/sq
 (defmethod editable-face-method-36 ((this editable-face) (arg0 (inline-array vector)))
   (let ((v1-0 (-> this length)))
     (cond
@@ -1837,6 +1949,8 @@
     )
   )
 
+;; definition for method 37 of type editable-face
+;; INFO: Used lq/sq
 (defmethod editable-face-method-37 ((this editable-face) (arg0 vector))
   (let ((s4-0 (new 'stack-no-clear 'inline-array 'vector 6)))
     (dotimes (v1-0 6)
@@ -1852,6 +1966,8 @@
   arg0
   )
 
+;; definition for method 13 of type editable-face
+;; INFO: Used lq/sq
 (defmethod editable-method-13 ((this editable-face) (arg0 vector))
   (let ((gp-0 (new 'stack-no-clear 'vector))
         (s5-0 (editable-face-method-37 this (new 'stack-no-clear 'vector)))
@@ -1897,6 +2013,8 @@
   -1.0
   )
 
+;; definition for method 14 of type editable-face
+;; INFO: Used lq/sq
 (defmethod editable-method-14 ((this editable-face) (arg0 vector) (arg1 vector))
   (local-vars (sv-560 editable-face) (sv-576 vector))
   (set! sv-560 this)
@@ -2069,6 +2187,29 @@
   -1.0
   )
 
+;; definition for method 31 of type editable-face
+;; INFO: Used lq/sq
+;; WARN: Stack slot offset 292 signed mismatch
+;; WARN: Stack slot offset 292 signed mismatch
+;; WARN: Stack slot offset 292 signed mismatch
+;; WARN: Stack slot offset 292 signed mismatch
+;; WARN: Stack slot offset 292 signed mismatch
+;; WARN: Stack slot offset 292 signed mismatch
+;; WARN: Stack slot offset 292 signed mismatch
+;; WARN: Stack slot offset 292 signed mismatch
+;; WARN: Stack slot offset 292 signed mismatch
+;; WARN: Stack slot offset 292 signed mismatch
+;; WARN: Stack slot offset 292 signed mismatch
+;; WARN: Stack slot offset 292 signed mismatch
+;; WARN: Stack slot offset 292 signed mismatch
+;; WARN: Stack slot offset 292 signed mismatch
+;; WARN: Stack slot offset 292 signed mismatch
+;; WARN: Stack slot offset 292 signed mismatch
+;; WARN: Stack slot offset 292 signed mismatch
+;; WARN: Stack slot offset 292 signed mismatch
+;; WARN: Stack slot offset 292 signed mismatch
+;; WARN: Stack slot offset 292 signed mismatch
+;; WARN: Return type mismatch int vs none.
 ;; WARN: Function (method 31 editable-face) has a return type of none, but the expression builder found a return statement.
 (defmethod editable-method-31 ((this editable-face) (arg0 editable-flag))
   (local-vars
@@ -2225,6 +2366,9 @@
   (none)
   )
 
+;; definition for method 10 of type editable-face
+;; INFO: Used lq/sq
+;; WARN: Return type mismatch int vs none.
 (defmethod editable-method-10 ((this editable-face))
   (local-vars (sv-112 int))
   (let ((gp-0 (new 'stack-no-clear 'inline-array 'vector 6)))
@@ -2272,6 +2416,7 @@
   (none)
   )
 
+;; definition for method 15 of type editable-plane
 (defmethod editable-method-15 ((this editable-plane))
   (if (>= (-> this length) 1)
       (editable-method-15 (-> this vertex 0))
@@ -2279,6 +2424,7 @@
       )
   )
 
+;; definition for method 24 of type editable-plane
 (defmethod editable-method-24 ((this editable-plane) (arg0 editable-array) (arg1 int) (arg2 int))
   (let ((s4-0 (clear *temp-string*)))
     (format
@@ -2300,6 +2446,7 @@
   #t
   )
 
+;; definition for method 27 of type editable-plane
 (defmethod delete! ((this editable-plane) (arg0 editable))
   (dotimes (s4-0 (-> this length))
     (let ((s3-0 (-> this vertex s4-0)))
@@ -2310,12 +2457,14 @@
   (none)
   )
 
+;; definition for method 28 of type editable-plane
 (defmethod editable-method-28 ((this editable-plane) (arg0 editable) (arg1 editable))
   (editable-method-16 arg1)
   ((method-of-type editable editable-method-28) this arg0 arg1)
   (none)
   )
 
+;; definition for method 29 of type editable-plane
 (defmethod copy-into-editable-array! ((this editable-plane) (arg0 editable-array))
   (let ((gp-1 (call-parent-method this arg0)))
     (dotimes (s4-0 (-> gp-1 length))
@@ -2326,6 +2475,8 @@
     )
   )
 
+;; definition for method 26 of type editable-plane
+;; WARN: Return type mismatch int vs none.
 (defmethod editable-method-26 ((this editable-plane))
   (let ((s5-1 (vector-!
                 (new 'stack-no-clear 'vector)
@@ -2342,6 +2493,7 @@
   (none)
   )
 
+;; definition for method 36 of type editable-plane
 (defmethod editable-plane-method-36 ((this editable-plane) (arg0 (inline-array vector)))
   (case (-> this length)
     ((2)
@@ -2377,6 +2529,7 @@
     )
   )
 
+;; definition for method 37 of type editable-plane
 (defmethod editable-plane-method-37 ((this editable-plane) (arg0 vector))
   (case (-> this length)
     ((2)
@@ -2391,6 +2544,8 @@
   arg0
   )
 
+;; definition for method 13 of type editable-plane
+;; INFO: Used lq/sq
 (defmethod editable-method-13 ((this editable-plane) (arg0 vector))
   (let ((gp-0 (new 'stack-no-clear 'vector))
         (s5-0 (editable-plane-method-37 this (new 'stack-no-clear 'vector)))
@@ -2437,6 +2592,9 @@
   -1.0
   )
 
+;; definition for method 10 of type editable-plane
+;; INFO: Used lq/sq
+;; WARN: Return type mismatch int vs none.
 (defmethod editable-method-10 ((this editable-plane))
   (let ((gp-0 (new 'stack-no-clear 'inline-array 'vector 4)))
     (dotimes (v1-0 4)
@@ -2483,6 +2641,8 @@
   (none)
   )
 
+;; definition for method 19 of type editable-plane
+;; WARN: Return type mismatch int vs none.
 (defmethod editable-method-19 ((this editable-plane) (arg0 vector))
   (let ((v1-0 (-> this region)))
     (if v1-0
@@ -2502,6 +2662,7 @@
   (none)
   )
 
+;; definition for method 7 of type editable-array
 ;; WARN: Return type mismatch (array editable) vs editable-array.
 (defmethod relocate ((this editable-array) (offset int))
   (the-as editable-array (when (nonzero? (-> this selection))
@@ -2513,15 +2674,18 @@
           )
   )
 
+;; definition for method 4 of type editable-array
 (defmethod length ((this editable-array))
   (-> this length)
   )
 
+;; definition for method 5 of type editable-array
 ;; WARN: Return type mismatch uint vs int.
 (defmethod asize-of ((this editable-array))
   (the-as int (+ (-> this type size) (* (-> this allocated-length) 4)))
   )
 
+;; definition for method 12 of type editable-array
 (defmethod get-length ((this editable-array))
   (dotimes (v1-0 (-> this length))
     (if (not (-> this data v1-0))
@@ -2535,6 +2699,7 @@
   -1
   )
 
+;; definition for method 10 of type editable-array
 (defmethod editable-array-method-10 ((this editable-array) (arg0 vector) (arg1 int))
   (when (or (!= (-> arg0 x) (-> *editable-work* last-x)) (!= (-> arg0 y) (-> *editable-work* last-y)))
     (set! (-> *editable-work* last-found) 0)
@@ -2606,6 +2771,7 @@
     )
   )
 
+;; definition for method 11 of type editable-array
 ;; WARN: Return type mismatch symbol vs none.
 (defmethod editable-array-method-11 ((this editable-array) (arg0 vector) (arg1 vector) (arg2 int))
   (let* ((s2-0 (-> this length))
@@ -2642,6 +2808,7 @@
   (none)
   )
 
+;; definition for method 15 of type editable-array
 (defmethod editable-array-method-15 ((this editable-array) (arg0 (function editable editable-region symbol)) (arg1 editable-region))
   (let ((gp-0 (-> this selection)))
     (set! (-> gp-0 length) 0)
@@ -2664,6 +2831,8 @@
     )
   )
 
+;; definition for method 16 of type editable-array
+;; WARN: Return type mismatch int vs none.
 (defmethod editable-array-method-16 ((this editable-array) (arg0 editable))
   (let ((gp-0 (-> arg0 region)))
     (when gp-0
@@ -2700,6 +2869,7 @@
   (none)
   )
 
+;; definition for function load-editable-lights
 (defun load-editable-lights ((arg0 editable-array))
   (local-vars (sv-16 sql-result))
   (let ((s5-0 sql-query))
@@ -2798,6 +2968,7 @@
   #f
   )
 
+;; definition for method 13 of type editable-array
 (defmethod editable-array-method-13 ((this editable-array) (arg0 symbol))
   (local-vars
     (sv-16 sql-result)
@@ -3123,6 +3294,7 @@
   #t
   )
 
+;; definition for method 19 of type editable-array
 (defmethod editable-array-method-19 ((this editable-array) (arg0 string))
   (local-vars (sv-16 sql-result))
   (let ((s4-0 sql-query))
@@ -3181,6 +3353,8 @@
   #f
   )
 
+;; definition for method 14 of type editable-array
+;; WARN: Return type mismatch int vs none.
 (defmethod editable-array-method-14 ((this editable-array) (arg0 editable-command) (arg1 editable-command) (arg2 string))
   (set! (-> this target) #f)
   (set! (-> this target-mode) arg0)
@@ -3190,6 +3364,9 @@
   (none)
   )
 
+;; definition for method 17 of type editable-array
+;; INFO: Used lq/sq
+;; WARN: Return type mismatch int vs none.
 (defmethod editable-array-method-17 ((this editable-array))
   (cond
     ((-> this edit-plane)
@@ -3207,6 +3384,8 @@
   (none)
   )
 
+;; definition for method 18 of type editable-array
+;; INFO: Used lq/sq
 (defmethod editable-array-method-18 ((this editable-array) (arg0 vector) (arg1 vector))
   (cond
     ((and (cpad-hold? 0 up) *target*)
@@ -3223,6 +3402,7 @@
   arg0
   )
 
+;; failed to figure out what this is:
 (when (zero? *editable-sample-region*)
   (let ((v1-6 (new 'debug 'editable-region)))
     (set! (-> v1-6 locked) #t)
@@ -3246,3 +3426,7 @@
     (set! *editable-entity-region* v0-108)
     )
   )
+
+
+
+

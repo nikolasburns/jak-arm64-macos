@@ -1,15 +1,11 @@
 ;;-*-Lisp-*-
 (in-package goal)
 
-;; name: nav-mesh-editor.gc
-;; name in dgo: nav-mesh-editor
-;; dgos: GAME
-
-;; DECOMP BEGINS
-
 ;; this file is debug only
 (declare-file (debug))
 
+;; definition for function snap-level-navmesh
+;; INFO: Used lq/sq
 (defun snap-level-navmesh ((arg0 vector) (arg1 vector))
   (local-vars (sv-96 nav-poly) (sv-112 vector) (sv-128 int))
   (dotimes (s4-0 (-> *level* length))
@@ -56,12 +52,15 @@
   #f
   )
 
+;; definition for method 11 of type nav-mesh-editable
+;; INFO: Used lq/sq
 (defmethod add-vert! ((this nav-mesh-editable) (arg0 vector))
   (vector-copy! (-> this verts data (-> this verts length)) arg0)
   (+! (-> this verts length) 1)
   (+ (-> this verts length) -1)
   )
 
+;; definition for method 12 of type nav-mesh-editable
 ;; WARN: Return type mismatch int vs object.
 (defmethod nav-mesh-editable-method-12 ((this nav-mesh-editable) (arg0 vector) (arg1 symbol))
   (let ((s3-0 (new 'stack-no-clear 'vector)))
@@ -94,6 +93,7 @@
   -1
   )
 
+;; definition for function mouse-intersect-triangle
 (defun mouse-intersect-triangle ((arg0 vector) (arg1 vector) (arg2 vector) (arg3 vector))
   (let ((s5-0 (normal-of-plane (new 'stack-no-clear 'vector) arg1 arg2 arg3))
         (gp-0 (new 'stack-no-clear 'vector))
@@ -108,6 +108,8 @@
   -1.0
   )
 
+;; definition for method 14 of type nav-mesh-editable
+;; INFO: Used lq/sq
 (defmethod nav-mesh-editable-method-14 ((this nav-mesh-editable) (arg0 vector))
   (dotimes (s4-0 (-> this tris length))
     (let ((s3-0 (-> this tris data s4-0)))
@@ -172,6 +174,7 @@
   -1
   )
 
+;; definition for method 13 of type nav-mesh-editable
 ;; WARN: Return type mismatch symbol vs none.
 (defmethod nav-mesh-editable-method-13 ((this nav-mesh-editable))
   (set! (-> this tris length) 0)
@@ -186,6 +189,8 @@
   (none)
   )
 
+;; definition for method 10 of type nav-mesh-editable
+;; WARN: Return type mismatch int vs none.
 (defmethod nav-mesh-editable-method-10 ((this nav-mesh-editable) (arg0 symbol))
   (let ((s4-0 (-> this tris))
         (s3-0 (-> this verts))
@@ -302,6 +307,7 @@
   (none)
   )
 
+;; definition for symbol *clean-vertex-array*, type (inline-array vector)
 (define *clean-vertex-array* (new 'static 'inline-array vector 1024
                                (new 'static 'vector)
                                (new 'static 'vector)
@@ -1330,6 +1336,7 @@
                                )
         )
 
+;; definition for symbol *clean-index-array*, type (pointer int32)
 (define *clean-index-array* (new 'static 'array int32 1024
                               0
                               0
@@ -2358,10 +2365,11 @@
                               )
         )
 
+;; definition for method 17 of type nav-mesh-editable
+;; INFO: Used lq/sq
 ;; WARN: Return type mismatch int vs object.
 (defmethod nav-mesh-editable-method-17 ((this nav-mesh-editable))
-  ;; og:preserve-this added v1-13 and v1-17
-  (local-vars (sv-16 symbol) (sv-32 int) (sv-48 vector) (v1-13 symbol) (v1-17 symbol))
+  (local-vars (sv-16 symbol) (sv-32 int) (sv-48 vector))
   (let ((s5-0 0))
     (let ((s4-0 0))
       (b! #t cfg-33 :delay (nop!))
@@ -2434,6 +2442,7 @@
   0
   )
 
+;; definition for method 14 of type nav-mesh-poly
 ;; WARN: Return type mismatch int vs object.
 (defmethod nav-mesh-poly-method-14 ((this nav-mesh-poly) (arg0 int) (arg1 int))
   (set! (-> this poly-id) (the-as uint arg1))
@@ -2464,6 +2473,7 @@
   0
   )
 
+;; definition for method 15 of type nav-mesh-editable
 ;; WARN: Return type mismatch int vs object.
 ;; WARN: new jak 2 until loop case, check carefully
 (defmethod nav-mesh-editable-method-15 ((this nav-mesh-editable) (arg0 int))
@@ -2573,6 +2583,7 @@
   0
   )
 
+;; definition for function poly-flag-to-string
 ;; WARN: Return type mismatch symbol vs object.
 (defun poly-flag-to-string ((arg0 object) (arg1 nav-mesh-poly-flag))
   (let ((v1-0 #t))
@@ -2600,6 +2611,8 @@
     )
   )
 
+;; definition for method 18 of type nav-mesh-editable
+;; WARN: Return type mismatch int vs none.
 ;; WARN: Function (method 18 nav-mesh-editable) has a return type of none, but the expression builder found a return statement.
 (defmethod nav-mesh-editable-method-18 ((this nav-mesh-editable))
   (format #t "Deleting nav-mesh ~D...~%" (-> this navmesh-id))
@@ -2652,6 +2665,8 @@
   (none)
   )
 
+;; definition for method 16 of type nav-mesh-editable
+;; INFO: Used lq/sq
 ;; WARN: Return type mismatch int vs object.
 (defmethod nav-mesh-editable-method-16 ((this nav-mesh-editable))
   (format #t "Saving nav-mesh ~D~%" (-> this navmesh-id))
@@ -2965,6 +2980,7 @@
   0
   )
 
+;; definition for method 13 of type nav-mesh-poly
 (defmethod nav-mesh-poly-method-13 ((this nav-mesh-poly) (arg0 int))
   (dotimes (v1-0 (-> this index length))
     (if (= (-> this index data v1-0) arg0)
@@ -2974,6 +2990,8 @@
   -1
   )
 
+;; definition for method 11 of type nav-mesh-poly
+;; WARN: Return type mismatch int vs none.
 (defmethod nav-mesh-poly-method-11 ((this nav-mesh-poly) (arg0 int))
   (cond
     ((zero? (-> this index length))
@@ -3005,6 +3023,8 @@
   (none)
   )
 
+;; definition for method 12 of type nav-mesh-poly
+;; WARN: Return type mismatch int vs none.
 (defmethod nav-mesh-poly-method-12 ((this nav-mesh-poly) (arg0 int))
   (when (< (the-as uint arg0) (the-as uint (-> this index length)))
     (if (and (>= (-> this insert-pos) (the-as uint arg0)) (> (-> this insert-pos) 0))
@@ -3019,6 +3039,7 @@
   (none)
   )
 
+;; definition of type triangulation-vert
 (deftype triangulation-vert (structure)
   ((index  uint32)
    (ear?   symbol)
@@ -3026,7 +3047,21 @@
    )
   )
 
+;; definition for method 3 of type triangulation-vert
+(defmethod inspect ((this triangulation-vert))
+  (when (not this)
+    (set! this this)
+    (goto cfg-4)
+    )
+  (format #t "[~8x] ~A~%" this 'triangulation-vert)
+  (format #t "~1Tindex: ~D~%" (-> this index))
+  (format #t "~1Tear?: ~A~%" (-> this ear?))
+  (format #t "~1Tscore: ~f~%" (-> this score))
+  (label cfg-4)
+  this
+  )
 
+;; definition for function point-in-cone
 ;; WARN: disable def twice: 23. This may happen when a cond (no else) is nested inside of another conditional, but it should be rare.
 (defun point-in-cone ((arg0 vector) (arg1 vector) (arg2 vector) (arg3 vector))
   (let ((v1-1 (vector-! (new 'stack-no-clear 'vector) arg0 arg2))
@@ -3044,6 +3079,7 @@
     )
   )
 
+;; definition for function segment-in-cone
 ;; WARN: disable def twice: 23. This may happen when a cond (no else) is nested inside of another conditional, but it should be rare.
 (defun segment-in-cone ((arg0 vector) (arg1 vector) (arg2 vector) (arg3 vector))
   (let ((v1-1 (vector-! (new 'stack-no-clear 'vector) arg1 arg0))
@@ -3061,6 +3097,7 @@
     )
   )
 
+;; definition for function point-in-triangle
 (defun point-in-triangle ((arg0 vector) (arg1 vector) (arg2 vector) (arg3 vector))
   (local-vars (v0-0 symbol))
   (let ((t0-1 (vector-! (new 'stack-no-clear 'vector) arg2 arg1))
@@ -3084,6 +3121,7 @@
   v0-0
   )
 
+;; definition for function segments-intersect
 (defun segments-intersect ((arg0 vector) (arg1 vector) (arg2 vector) (arg3 vector))
   (let* ((v1-1 (vector-! (new 'stack-no-clear 'vector) arg2 arg0))
          (f0-2 (- (* (-> arg1 x) (-> arg3 z)) (* (-> arg1 z) (-> arg3 x))))
@@ -3115,6 +3153,7 @@
   #f
   )
 
+;; definition for function is-diagonal
 (defun is-diagonal ((arg0 int) (arg1 (inline-array triangulation-vert)) (arg2 vector-array) (arg3 int) (arg4 int) (arg5 int))
   (mod (+ arg0 -1 arg3) arg0)
   (mod (+ arg0 1 arg5) arg0)
@@ -3170,6 +3209,7 @@
   #t
   )
 
+;; definition for symbol *verts-buf-1*, type (inline-array triangulation-vert)
 (define *verts-buf-1* (new 'static 'inline-array triangulation-vert 256
                         (new 'static 'triangulation-vert)
                         (new 'static 'triangulation-vert)
@@ -3430,6 +3470,7 @@
                         )
         )
 
+;; definition for symbol *verts-buf-2*, type (inline-array triangulation-vert)
 (define *verts-buf-2* (new 'static 'inline-array triangulation-vert 256
                         (new 'static 'triangulation-vert)
                         (new 'static 'triangulation-vert)
@@ -3690,6 +3731,9 @@
                         )
         )
 
+;; definition for method 10 of type nav-mesh-poly
+;; INFO: Used lq/sq
+;; WARN: Return type mismatch int vs none.
 ;; WARN: Function (method 10 nav-mesh-poly) has a return type of none, but the expression builder found a return statement.
 (defmethod nav-mesh-poly-method-10 ((this nav-mesh-poly) (arg0 nav-mesh-editable))
   (local-vars
@@ -3984,6 +4028,8 @@
     )
   )
 
+;; definition for method 21 of type nav-mesh-editor
+;; WARN: Return type mismatch int vs none.
 (defmethod nav-mesh-editor-method-21 ((this nav-mesh-editor))
   (set! *display-region-marks* #f)
   (when #f
@@ -3997,6 +4043,8 @@
   (none)
   )
 
+;; definition for method 22 of type nav-mesh-editor
+;; INFO: Used lq/sq
 ;; WARN: Return type mismatch symbol vs none.
 (defmethod nav-mesh-editor-method-22 ((this nav-mesh-editor))
   (vector-copy! (-> this mouse-pos) (-> *math-camera* trans))
@@ -4064,6 +4112,7 @@
   (none)
   )
 
+;; definition for function draw-square-point
 ;; WARN: Return type mismatch pointer vs object.
 (defun draw-square-point ((arg0 vector))
   (let* ((s4-0 (new 'stack-no-clear 'vector))
@@ -4106,6 +4155,7 @@
     )
   )
 
+;; failed to figure out what this is:
 (defstate idle (nav-mesh-editor)
   :virtual #t
   :event (behavior ((proc process) (argc int) (message symbol) (block event-message-block))
@@ -4605,6 +4655,7 @@
     )
   )
 
+;; definition for function get-level-id
 (defun get-level-id ((arg0 string))
   (let ((s5-0 (clear *temp-string*)))
     (format s5-0 "select level_info_id from level_info where name='~S'" arg0)
@@ -4618,6 +4669,8 @@
     )
   )
 
+;; definition for method 23 of type nav-mesh-editor
+;; WARN: Return type mismatch int vs none.
 (defmethod set-level-info! ((this nav-mesh-editor) (arg0 symbol))
   (set! (-> this level-id) (the-as uint (get-level-id (the-as string arg0))))
   (set! (-> this level-name) (the-as string arg0))
@@ -4625,6 +4678,7 @@
   (none)
   )
 
+;; definition for method 24 of type nav-mesh-editor
 ;; WARN: Return type mismatch int vs object.
 (defmethod select-nav-mesh-by-id ((this nav-mesh-editor) (arg0 int))
   (set! (-> this undo-id) (the-as uint 0))
@@ -4669,6 +4723,9 @@
   0
   )
 
+;; definition for method 25 of type nav-mesh-editor
+;; INFO: Used lq/sq
+;; WARN: Return type mismatch int vs none.
 ;; WARN: Function (method 25 nav-mesh-editor) has a return type of none, but the expression builder found a return statement.
 (defmethod nav-mesh-editor-method-25 ((this nav-mesh-editor))
   (if (not (-> this current-nav-mesh))
@@ -4708,6 +4765,9 @@
   (none)
   )
 
+;; definition for method 26 of type nav-mesh-editor
+;; INFO: Used lq/sq
+;; WARN: Return type mismatch int vs none.
 ;; WARN: Function (method 26 nav-mesh-editor) has a return type of none, but the expression builder found a return statement.
 (defmethod nav-mesh-editor-method-26 ((this nav-mesh-editor))
   (if (>= (-> this undo-id) (-> this undo-max))
@@ -4744,6 +4804,8 @@
   (none)
   )
 
+;; definition for method 27 of type nav-mesh-editor
+;; INFO: Used lq/sq
 ;; WARN: Return type mismatch int vs object.
 (defmethod nav-mesh-editor-method-27 ((this nav-mesh-editor))
   (if (>= (-> this undo-min) (-> this undo-id))
@@ -4782,6 +4844,7 @@
   0
   )
 
+;; definition for method 10 of type nav-mesh-editor
 (defmethod deactivate ((this nav-mesh-editor))
   "Make a process dead, clean it up, remove it from the active pool, and return to dead pool."
   (set! *nav-mesh-editor* (the-as (pointer nav-mesh-editor) #f))
@@ -4789,6 +4852,7 @@
   (none)
   )
 
+;; definition for function nav-mesh-editor-new
 ;; WARN: Return type mismatch int vs object.
 (defun nav-mesh-editor-new ()
   (if *nav-mesh-editor*
@@ -4797,6 +4861,7 @@
   0
   )
 
+;; definition for function nav-delete
 ;; WARN: Return type mismatch int vs object.
 (defun nav-delete ((arg0 int))
   (if *nav-mesh-editor*
@@ -4805,6 +4870,7 @@
   0
   )
 
+;; definition for function nav-mesh-editor-translate
 ;; WARN: Return type mismatch int vs object.
 (defun nav-mesh-editor-translate ((arg0 int) (arg1 float) (arg2 float) (arg3 float))
   (if *nav-mesh-editor*
@@ -4813,6 +4879,7 @@
   0
   )
 
+;; definition for function nav-mesh-editor-rotate-y
 ;; WARN: Return type mismatch int vs object.
 (defun nav-mesh-editor-rotate-y ((arg0 float))
   (if *nav-mesh-editor*
@@ -4821,6 +4888,7 @@
   0
   )
 
+;; definition for function nav-mesh-editor-load
 ;; WARN: Return type mismatch int vs object.
 (defun nav-mesh-editor-load ((arg0 string))
   (when *nav-mesh-editor*
@@ -4838,6 +4906,7 @@
   0
   )
 
+;; definition for function nav-mesh-editor-set-level
 ;; WARN: Return type mismatch int vs object.
 (defun nav-mesh-editor-set-level ((arg0 symbol))
   (if *nav-mesh-editor*
@@ -4846,6 +4915,7 @@
   0
   )
 
+;; definition for function nav-set-lev
 ;; WARN: Return type mismatch int vs object.
 (defun nav-set-lev ((arg0 string))
   (when (and *nav-mesh-editor* (-> *nav-mesh-editor* 0 current-nav-mesh))
@@ -4856,6 +4926,7 @@
   0
   )
 
+;; definition for function nav-set-flag
 ;; WARN: Return type mismatch int vs object.
 (defun nav-set-flag ((arg0 nav-mesh-poly-flag))
   (when (and *nav-mesh-editor* (-> *nav-mesh-editor* 0 current-nav-mesh))
@@ -4866,6 +4937,8 @@
   0
   )
 
+;; definition for function nav-mesh-editor-init
+;; INFO: Used lq/sq
 (defbehavior nav-mesh-editor-init nav-mesh-editor ((arg0 symbol))
   (set! *display-profile* #f)
   (set! *display-entity-errors* #f)

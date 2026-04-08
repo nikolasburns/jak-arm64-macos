@@ -1,18 +1,10 @@
 ;;-*-Lisp-*-
 (in-package goal)
 
-;; name: editable-player.gc
-;; name in dgo: editable-player
-;; dgos: GAME
-
-(define-extern editable-player-init (function symbol none :behavior editable-player))
-(define-extern *editable-menu-context* debug-menu-context)
-
-;; DECOMP BEGINS
-
 ;; this file is debug only
 (declare-file (debug))
 
+;; definition for function cleanup-selection
 ;; WARN: Return type mismatch int vs object.
 (defun cleanup-selection ((arg0 editable-array))
   (let* ((v1-0 (-> arg0 length))
@@ -42,6 +34,8 @@
   0
   )
 
+;; definition for function insert-box
+;; INFO: Used lq/sq
 ;; WARN: Return type mismatch int vs object.
 (defun insert-box ((arg0 editable-array) (arg1 vector) (arg2 vector))
   (if (not (-> arg0 region))
@@ -163,6 +157,8 @@
   0
   )
 
+;; definition for function insert-wall
+;; INFO: Used lq/sq
 ;; WARN: Return type mismatch int vs object.
 (defun insert-wall ((arg0 editable-array) (arg1 vector) (arg2 vector))
   (if (not (-> arg0 region))
@@ -212,6 +208,8 @@
   0
   )
 
+;; definition for function update-manipulator-position
+;; INFO: Used lq/sq
 (defun update-manipulator-position ((arg0 editable-array) (arg1 manipulator))
   (local-vars (sv-32 vector) (sv-40 int) (sv-48 euler-angles))
   (set! sv-32 (new-stack-vector0))
@@ -241,6 +239,7 @@
     )
   )
 
+;; definition for function execute-select
 (defun execute-select ((arg0 editable-array) (arg1 editable-command) (arg2 mouse-info) (arg3 manipulator))
   (case arg1
     (((editable-command select-none))
@@ -699,6 +698,8 @@
   #t
   )
 
+;; definition for function execute-mouse-move
+;; INFO: Used lq/sq
 (defun execute-mouse-move ((arg0 editable-array) (arg1 editable-command) (arg2 mouse-info) (arg3 manipulator))
   (local-vars
     (v0-2 object)
@@ -976,6 +977,7 @@
     )
   )
 
+;; definition for function execute-move
 (defun execute-move ((arg0 editable-array) (arg1 editable-command) (arg2 mouse-info) (arg3 manipulator))
   (case arg1
     (((editable-command drag-resize))
@@ -1279,6 +1281,7 @@
   #t
   )
 
+;; definition for method 9 of type editable-array
 (defmethod handle-cmd ((this editable-array) (arg0 editable-command) (arg1 mouse-info) (arg2 object))
   (with-pp
     (if (execute-select this arg0 arg1 (the-as manipulator arg2))
@@ -1596,10 +1599,9 @@
     )
   )
 
+;; definition for method 10 of type editable-player
 (defmethod deactivate ((this editable-player))
   "Make a process dead, clean it up, remove it from the active pool, and return to dead pool."
-  ;; og:preserve-this put the pad back to normal
-  (pc-treat-pad0-as-pad1 #f)
   (dotimes (v1-0 (-> *level* length))
     (let ((a1-3 (-> *level* level v1-0)))
       (if (= (-> a1-3 status) 'active)
@@ -1613,6 +1615,7 @@
   (none)
   )
 
+;; definition for method 7 of type editable-player
 ;; WARN: Return type mismatch process-drawable vs editable-player.
 (defmethod relocate ((this editable-player) (offset int))
   (let ((v1-0 *kernel-context*))
@@ -1633,6 +1636,9 @@
   (the-as editable-player ((method-of-type process-drawable relocate) this offset))
   )
 
+;; definition for method 21 of type editable-player
+;; INFO: Used lq/sq
+;; WARN: Return type mismatch int vs none.
 (defmethod editable-player-method-21 ((this editable-player))
   (set! *display-region-marks* #f)
   (let* ((s5-0 (-> this current length))
@@ -1793,6 +1799,8 @@
   (none)
   )
 
+;; definition for method 22 of type editable-player
+;; WARN: Return type mismatch int vs none.
 (defmethod editable-player-method-22 ((this editable-player))
   (cond
     ((or (logtest? (-> *keybd* keys 0) 4) (logtest? (-> *keybd* keys 0) 64))
@@ -1930,6 +1938,7 @@
   (none)
   )
 
+;; definition for function get-light-value
 (defun get-light-value ((arg0 uint))
   (let ((f30-0 0.0))
     (let* ((s5-0 (-> *editable* 0 current length))
@@ -1952,6 +1961,7 @@
     )
   )
 
+;; definition for function set-light-value
 ;; WARN: Return type mismatch symbol vs object.
 (defun set-light-value ((arg0 int) (arg1 float))
   (let* ((s4-0 (-> *editable* 0 current length))
@@ -1980,6 +1990,7 @@
   #f
   )
 
+;; definition for method 23 of type editable-player
 (defmethod editable-player-method-23 ((this editable-player))
   (let ((s5-0 (-> this current))
         (s4-0 (new
@@ -2252,6 +2263,7 @@
   #t
   )
 
+;; definition for function keybd-set-time-of-day!
 ;; WARN: Return type mismatch time-of-day-palette-id vs object.
 (defun keybd-set-time-of-day! ((arg0 int) (arg1 time-of-day-palette-id))
   (cond
@@ -2280,6 +2292,7 @@
   arg1
   )
 
+;; failed to figure out what this is:
 (defstate idle (editable-player)
   :virtual #t
   :event (behavior ((proc process) (argc int) (message symbol) (block event-message-block))
@@ -2607,468 +2620,6 @@
        )
       )
     )
-  :trans (behavior ()
-    (let ((gp-0 (-> self current)))
-      (set! (-> gp-0 move-lock?) #f)
-      (when (cpad-pressed? 1 start)
-        (when (!= *master-mode* 'menu)
-          (set-master-mode 'menu)
-          (logclear! (-> *cpad-list* cpads 1 button0-abs 0) (pad-buttons start))
-          (logclear! (-> *cpad-list* cpads 1 button0-rel 0) (pad-buttons start))
-          )
-        )
-      (when (or (and (= *master-mode* 'menu) (> (-> self close-menu-time) 0) (>= (current-time) (-> self close-menu-time)))
-                (cpad-pressed? 1 start)
-                )
-        (debug-menu-context-send-msg *editable-menu-context* (debug-menu-msg deactivate) (debug-menu-dest activation))
-        (set-master-mode *last-master-mode*)
-        (set! (-> self close-menu-time) 0)
-        0
-        )
-      (debug-menus-handler *editable-menu-context*)
-      (set-setting! 'cpad1-skip-buttons 'abs #t 0)
-      (set-setting! 'mouse-input 'abs #f 0)
-      (when (!= *master-mode* 'menu)
-        (if (= (-> self current-command) (editable-command none))
-            (editable-player-method-22 self)
-            )
-        (case (-> self current target-mode)
-          (((editable-command pick-target) (editable-command pick-loc))
-           (set! (-> self command 0) (-> self current target-mode))
-           )
-          (((editable-command pick-yes-no))
-           (when (!= *master-mode* 'menu)
-             (cond
-               ((not (-> self left-handed))
-                (cond
-                  ((cpad-hold? 1 x)
-                   (logclear! (-> *cpad-list* cpads 1 button0-abs 0) (pad-buttons x))
-                   (logclear! (-> *cpad-list* cpads 1 button0-rel 0) (pad-buttons x))
-                   (handle-cmd gp-0 (-> self current target-mode) *mouse* (-> self manipulator))
-                   )
-                  ((cpad-pressed? 1 square)
-                   (logclear! (-> *cpad-list* cpads 1 button0-abs 0) (pad-buttons square))
-                   (logclear! (-> *cpad-list* cpads 1 button0-rel 0) (pad-buttons square))
-                   (handle-cmd gp-0 (editable-command cancel) *mouse* (-> self manipulator))
-                   )
-                  )
-                )
-               (else
-                 (cond
-                   ((cpad-hold? 1 down)
-                    (logclear! (-> *cpad-list* cpads 1 button0-abs 0) (pad-buttons down))
-                    (logclear! (-> *cpad-list* cpads 1 button0-rel 0) (pad-buttons down))
-                    (handle-cmd gp-0 (-> self current target-mode) *mouse* (-> self manipulator))
-                    )
-                   ((cpad-pressed? 1 left)
-                    (logclear! (-> *cpad-list* cpads 1 button0-abs 0) (pad-buttons left))
-                    (logclear! (-> *cpad-list* cpads 1 button0-rel 0) (pad-buttons left))
-                    (handle-cmd gp-0 (editable-command cancel) *mouse* (-> self manipulator))
-                    )
-                   )
-                 )
-               )
-             )
-           )
-          )
-        (when (mouse-hold? left)
-          (+! (-> self float-variable) (* (- (-> *mouse* posx) (-> *mouse* pos 1 x)) (-> self float-step)))
-          (set! (-> self float-variable) (fmax (fmin (-> self float-variable) (-> self float-max)) (-> self float-min)))
-          )
-        (cond
-          ((= (-> *keybd* keys 12) 2)
-           (handle-cmd gp-0 (editable-command print-region-info) *mouse* (-> self manipulator))
-           )
-          ((= (-> *keybd* keys 11) 2)
-           (set! (-> *editable-work* hide) (not (-> *editable-work* hide)))
-           )
-          ((= (-> *keybd* keys 43) 2)
-           (let ((s5-0 (new 'stack-no-clear 'vector)))
-             (vector-copy! s5-0 (-> self manipulator position))
-             (set! (-> s5-0 w) 4096.0)
-             (let* ((s4-0 (-> self current length))
-                    (s3-0 0)
-                    (s2-0 (-> self current data s3-0))
-                    )
-               (while (< s3-0 s4-0)
-                 (if (and s2-0 (logtest? (-> s2-0 flags) (editable-flag selected)))
-                     (set! (-> s5-0 w)
-                           (fmax
-                             (-> s5-0 w)
-                             (* 1.1 (+ (editable-method-16 s2-0) (vector-vector-distance s5-0 (editable-method-15 s2-0))))
-                             )
-                           )
-                     )
-                 (+! s3-0 1)
-                 (set! s2-0 (-> self current data s3-0))
-                 )
-               )
-             (send-event *camera* 'point-of-interest s5-0)
-             )
-           )
-          ((and (= (-> *keybd* keys 22) 2) (or (logtest? (-> *keybd* keys 0) 1) (logtest? (-> *keybd* keys 0) 16)))
-           (handle-cmd gp-0 (editable-command save) *mouse* (-> self manipulator))
-           )
-          ((= (-> *keybd* keys 41) 2)
-           (handle-cmd gp-0 (editable-command select-none) *mouse* (-> self manipulator))
-           )
-          ((= (-> *keybd* keys 9) 2)
-           (handle-cmd gp-0 (editable-command insert-face) *mouse* (-> self manipulator))
-           )
-          ((= (-> *keybd* keys 5) 2)
-           (handle-cmd gp-0 (editable-command insert-box) *mouse* (-> self manipulator))
-           )
-          ((= (-> *keybd* keys 26) 2)
-           (handle-cmd gp-0 (editable-command insert-wall) *mouse* (-> self manipulator))
-           )
-          ((= (-> *keybd* keys 15) 2)
-           (handle-cmd gp-0 (editable-command insert-light) *mouse* (-> self manipulator))
-           )
-          ((= (-> *keybd* keys 19) 2)
-           (handle-cmd gp-0 (editable-command insert-point) *mouse* (-> self manipulator))
-           )
-          ((= (-> *keybd* keys 22) 2)
-           (handle-cmd gp-0 (editable-command insert-sphere) *mouse* (-> self manipulator))
-           )
-          ((= (-> *keybd* keys 8) 2)
-           (handle-cmd gp-0 (editable-command insert-entity) *mouse* (-> self manipulator))
-           )
-          ((= (-> *keybd* keys 24) 2)
-           (handle-cmd gp-0 (editable-command update-game) *mouse* (-> self manipulator))
-           )
-          ((= (-> *keybd* keys 30) 2)
-           (keybd-set-time-of-day! 7 (time-of-day-palette-id))
-           )
-          ((= (-> *keybd* keys 31) 2)
-           (keybd-set-time-of-day! 10 (time-of-day-palette-id unk0))
-           )
-          ((= (-> *keybd* keys 32) 2)
-           (keybd-set-time-of-day! 12 (time-of-day-palette-id unk1))
-           )
-          ((= (-> *keybd* keys 33) 2)
-           (keybd-set-time-of-day! 14 (time-of-day-palette-id unk0 unk1))
-           )
-          ((= (-> *keybd* keys 34) 2)
-           (keybd-set-time-of-day! 18 (time-of-day-palette-id unk2))
-           )
-          ((= (-> *keybd* keys 35) 2)
-           (keybd-set-time-of-day! 19 (time-of-day-palette-id unk0 unk2))
-           )
-          ((= (-> *keybd* keys 36) 2)
-           (keybd-set-time-of-day! 23 (time-of-day-palette-id unk1 unk2))
-           )
-          ((= (-> *keybd* keys 37) 2)
-           (keybd-set-time-of-day! 4 (time-of-day-palette-id unk0 unk1 unk2))
-           )
-          ((= (-> *keybd* keys 38) 2)
-           (keybd-set-time-of-day! 0 (time-of-day-palette-id unk3))
-           )
-          ((= (-> *keybd* keys 39) 2)
-           (case *subdivide-draw-mode*
-             (((subdivide-setting textured))
-              (set! *subdivide-draw-mode* (subdivide-setting outline))
-              (set! *subdivide-scissor-draw-mode* (subdivide-setting outline))
-              (set! *subdivide-foreground-draw-mode* (subdivide-setting outline))
-              (set! *subdivide-ocean-draw-mode* (subdivide-setting outline))
-              )
-             (((subdivide-setting outline))
-              (set! *subdivide-draw-mode* (subdivide-setting gouraud))
-              (set! *subdivide-scissor-draw-mode* (subdivide-setting gouraud))
-              (set! *subdivide-foreground-draw-mode* (subdivide-setting gouraud))
-              (set! *subdivide-ocean-draw-mode* (subdivide-setting gouraud))
-              )
-             (((subdivide-setting gouraud))
-              ;; og:preserve-this
-              (set! *subdivide-draw-mode* (the subdivide-setting 0))
-              (set! *subdivide-scissor-draw-mode* (the subdivide-setting 0))
-              (set! *subdivide-foreground-draw-mode* (the subdivide-setting 0))
-              (set! *subdivide-ocean-draw-mode* (the subdivide-setting 0))
-              0
-              )
-             (((subdivide-setting hack))
-              ;; og:preserve-this
-              (set! *subdivide-draw-mode* (the subdivide-setting 0))
-              (set! *subdivide-scissor-draw-mode* (the subdivide-setting 0))
-              (set! *subdivide-foreground-draw-mode* (the subdivide-setting 0))
-              (set! *subdivide-ocean-draw-mode* (the subdivide-setting 0))
-              0
-              )
-             )
-           )
-          ((and (= (-> *keybd* keys 76) 2) (or (logtest? (-> *keybd* keys 0) 1) (logtest? (-> *keybd* keys 0) 16)))
-           (handle-cmd gp-0 (editable-command delete) *mouse* (-> self manipulator))
-           )
-          ((= (-> *keybd* keys 44) 2)
-           (handle-cmd gp-0 (editable-command snap-to-ground) *mouse* (-> self manipulator))
-           )
-          )
-        (vector-copy! (-> self mouse-pos) (-> *math-camera* trans))
-        (let ((a1-33 (new 'stack-no-clear 'vector))
-              (a2-20 (new 'stack-no-clear 'vector))
-              (a3-19 (new 'stack-no-clear 'vector))
-              )
-          (set! (-> a3-19 x) (-> *mouse* posx))
-          (set! (-> a3-19 y) (-> *mouse* posy))
-          (set! (-> a3-19 z) 0.0)
-          (set! (-> a3-19 w) 1.0)
-          (vector-copy! a2-20 (-> *math-camera* inv-camera-rot fvec))
-          (vector+*! a1-33 (-> self mouse-pos) (-> *math-camera* inv-camera-rot fvec) 16384000.0)
-          (reverse-transform-point! (-> self mouse-end) a1-33 a2-20 a3-19)
-          )
-        (let ((s5-1 (new 'stack 'collide-query)))
-          (vector-copy! (-> s5-1 start-pos) (-> self mouse-pos))
-          (vector-! (-> s5-1 move-dist) (-> self mouse-end) (-> self mouse-pos))
-          (let ((v1-236 s5-1))
-            (set! (-> v1-236 radius) 409.6)
-            (set! (-> v1-236 collide-with) (collide-spec backgnd obstacle hit-by-others-list pusher))
-            (set! (-> v1-236 ignore-process0) #f)
-            (set! (-> v1-236 ignore-process1) #f)
-            (set! (-> v1-236 ignore-pat)
-                  (new 'static 'pat-surface :noentity #x1 :nojak #x1 :probe #x1 :noendlessfall #x1 :board #x1)
-                  )
-            (set! (-> v1-236 action-mask) (collide-action solid))
-            )
-          (let ((f0-16 (fill-and-probe-using-line-sphere *collide-cache* s5-1)))
-            (cond
-              ((>= f0-16 0.0)
-               (vector+*! (-> self mouse-hit) (-> s5-1 start-pos) (-> s5-1 move-dist) f0-16)
-               (vector-copy! (-> self mouse-normal) (-> s5-1 best-other-tri normal))
-               )
-              (else
-                (vector-copy! (-> self mouse-hit) (-> self mouse-end))
-                (vector-copy! (-> self mouse-normal) *y-vector*)
-                )
-              )
-            )
-          )
-        (cond
-          ((editable-player-method-23 self)
-           )
-          ((= (-> *keybd* keys 58) 1)
-           (set! (-> self current-command) (editable-command select-user1))
-           (set! (-> self float-id) (the-as uint 60))
-           (set! (-> self float-variable) (get-light-value (-> self float-id)))
-           (set! (-> self float-step) 0.00390625)
-           (set! (-> self float-min) 0.0)
-           (set! (-> self float-max) 1.9921875)
-           )
-          ((= (-> *keybd* keys 59) 1)
-           (set! (-> self current-command) (editable-command select-user2))
-           (set! (-> self float-id) (the-as uint 64))
-           (set! (-> self float-variable) (get-light-value (-> self float-id)))
-           (set! (-> self float-step) 0.00390625)
-           (set! (-> self float-min) 0.0)
-           (set! (-> self float-max) 1.9921875)
-           )
-          ((= (-> *keybd* keys 60) 1)
-           (set! (-> self current-command) (editable-command select-user3))
-           (set! (-> self float-id) (the-as uint 68))
-           (set! (-> self float-variable) (get-light-value (-> self float-id)))
-           (set! (-> self float-step) 0.00390625)
-           (set! (-> self float-min) 0.0)
-           (set! (-> self float-max) 1.9921875)
-           )
-          ((= (-> *keybd* keys 61) 1)
-           (set! (-> self current-command) (editable-command select-user4))
-           (set! (-> self float-id) (the-as uint 72))
-           (set! (-> self float-variable) (get-light-value (-> self float-id)))
-           (set! (-> self float-step) 1.0)
-           (set! (-> self float-min) -2.0)
-           (set! (-> self float-max) 7.0)
-           )
-          ((= (-> *keybd* keys 62) 1)
-           (set! (-> self current-command) (editable-command select-user5))
-           (set! (-> self float-id) (the-as uint 76))
-           (set! (-> self float-variable) (get-light-value (-> self float-id)))
-           (set! (-> self float-step) 0.00390625)
-           (set! (-> self float-min) 0.0)
-           (set! (-> self float-max) 1.0)
-           )
-          ((= (-> *keybd* keys 63) 1)
-           (set! (-> self current-command) (editable-command select-user6))
-           (set! (-> self float-id) (the-as uint 80))
-           (set! (-> self float-variable) (get-light-value (-> self float-id)))
-           (set! (-> self float-step) 0.00390625)
-           (set! (-> self float-min) 0.0)
-           (set! (-> self float-max) 1.0)
-           )
-          ((= (-> *keybd* keys 64) 1)
-           (set! (-> self current-command) (editable-command select-user7))
-           (set! (-> self float-id) (the-as uint 84))
-           (set! (-> self float-variable) (get-light-value (-> self float-id)))
-           (set! (-> self float-step) 0.00390625)
-           (set! (-> self float-min) 0.0)
-           (set! (-> self float-max) 1.0)
-           )
-          ((= (-> *keybd* keys 65) 1)
-           (set! (-> self current-command) (editable-command select-user8))
-           (set! (-> self float-id) (the-as uint 88))
-           (set! (-> self float-variable) (get-light-value (-> self float-id)))
-           (set! (-> self float-step) 0.0625)
-           (set! (-> self float-min) 0.0)
-           (set! (-> self float-max) 1.0)
-           )
-          ((= (-> *keybd* keys 66) 1)
-           (set! (-> self current-command) (editable-command select-user9))
-           (set! (-> self float-id) (the-as uint 92))
-           (set! (-> self float-variable) (get-light-value (-> self float-id)))
-           (set! (-> self float-step) 0.0625)
-           (set! (-> self float-min) 0.0)
-           (set! (-> self float-max) 1.0)
-           )
-          ((= (-> *keybd* keys 67) 1)
-           (set! (-> self current-command) (editable-command select-user10))
-           (set! (-> self float-id) (the-as uint 96))
-           (set! (-> self float-variable) (get-light-value (-> self float-id)))
-           (set! (-> self float-step) 0.0625)
-           (set! (-> self float-min) 0.0)
-           (set! (-> self float-max) 1.0)
-           )
-          ((= (-> *keybd* keys 68) 1)
-           (set! (-> self current-command) (editable-command select-user11))
-           (set! (-> self float-id) (the-as uint 100))
-           (set! (-> self float-variable) (get-light-value (-> self float-id)))
-           (set! (-> self float-step) 0.0625)
-           (set! (-> self float-min) 0.0)
-           (set! (-> self float-max) 1.0)
-           )
-          ((= (-> *keybd* keys 69) 1)
-           (set! (-> self current-command) (editable-command select-user12))
-           (set! (-> self float-id) (the-as uint 104))
-           (set! (-> self float-variable) (get-light-value (-> self float-id)))
-           (set! (-> self float-step) 0.0625)
-           (set! (-> self float-min) 0.0)
-           (set! (-> self float-max) 1.0)
-           )
-          ((or (logtest? (-> *keybd* keys 0) 2) (logtest? (-> *keybd* keys 0) 32))
-           (when (and (mouse-pressed? left) (= (-> self command 0) (editable-command select-add)))
-             (set-vector!
-               (-> self mouse-box 0)
-               (the-as float (the int (-> *mouse* posx)))
-               (the-as float (the int (-> *mouse* posy)))
-               0.0
-               (the-as float #x1)
-               )
-             (set! (-> self current-command) (editable-command select-add))
-             )
-           (when (and (mouse-pressed? middle) (= (-> self command 4) (editable-command select-toggle)))
-             (set-vector!
-               (-> self mouse-box 0)
-               (the-as float (the int (-> *mouse* posx)))
-               (the-as float (the int (-> *mouse* posy)))
-               0.0
-               (the-as float #x1)
-               )
-             (set! (-> self current-command) (editable-command select-toggle))
-             )
-           (when (and (mouse-pressed? right) (= (-> self command 2) (editable-command select-remove)))
-             (set-vector!
-               (-> self mouse-box 0)
-               (the-as float (the int (-> *mouse* posx)))
-               (the-as float (the int (-> *mouse* posy)))
-               0.0
-               (the-as float #x1)
-               )
-             (set! (-> self current-command) (editable-command select-remove))
-             )
-           )
-          ((or (logtest? (-> *keybd* keys 0) 4) (logtest? (-> *keybd* keys 0) 64))
-           )
-          ((or (logtest? (-> *keybd* keys 0) 1) (logtest? (-> *keybd* keys 0) 16))
-           )
-          (else
-            (let ((v1-360 0))
-              (let* ((a0-254 (-> self current length))
-                     (a1-40 0)
-                     (a3-21 (-> self current data a1-40))
-                     )
-                (while (< a1-40 a0-254)
-                  (if (and a3-21 (logtest? (-> a3-21 flags) (editable-flag selected)))
-                      (+! v1-360 1)
-                      )
-                  (+! a1-40 1)
-                  (set! a3-21 (-> self current data a1-40))
-                  )
-                )
-              (cond
-                ((nonzero? v1-360)
-                 (manipulator-method-10 (-> self manipulator) (-> self mouse-pos) (-> self mouse-end))
-                 )
-                (else
-                  (set! (-> self manipulator action) (manipulator-action ma0))
-                  0
-                  )
-                )
-              )
-            (when (nonzero? (-> self manipulator action))
-              (cond
-                ((and (mouse-pressed? middle) (= (-> self command 5) (editable-command drag-scale)))
-                 (if (= (-> *keybd* keys 6) 1)
-                     (handle-cmd gp-0 (editable-command copy) *mouse* (-> self manipulator))
-                     )
-                 (set-mode (-> self manipulator) (manipulator-mode mm2))
-                 (manipulator-method-12 (-> self manipulator) (-> self mouse-end))
-                 (set! (-> self current-command) (editable-command drag-scale))
-                 )
-                ((and (mouse-pressed? left) (= (-> self command 1) (editable-command drag-move)))
-                 (if (= (-> *keybd* keys 6) 1)
-                     (handle-cmd gp-0 (editable-command copy) *mouse* (-> self manipulator))
-                     )
-                 (set-mode (-> self manipulator) (manipulator-mode mm0))
-                 (manipulator-method-12 (-> self manipulator) (-> self mouse-end))
-                 (set! (-> self current-command) (editable-command drag-move))
-                 )
-                ((and (mouse-pressed? left) (= (-> self command 1) (editable-command drag-rotate)))
-                 (if (= (-> *keybd* keys 6) 1)
-                     (handle-cmd gp-0 (editable-command copy) *mouse* (-> self manipulator))
-                     )
-                 (set-mode (-> self manipulator) (manipulator-mode mm1))
-                 (manipulator-method-12 (-> self manipulator) (-> self mouse-end))
-                 (set! (-> self current-command) (editable-command drag-rotate))
-                 )
-                )
-              )
-            )
-          )
-        (when (not (or (= (-> self current-command) (editable-command select-add))
-                       (= (-> self current-command) (editable-command select-remove))
-                       (= (-> self current-command) (editable-command select-toggle))
-                       )
-                   )
-          (if (mouse-pressed? left)
-              (handle-cmd gp-0 (-> self command 0) *mouse* (-> self manipulator))
-              )
-          (if (mouse-hold? left)
-              (handle-cmd gp-0 (-> self command 1) *mouse* (-> self manipulator))
-              )
-          (if (mouse-pressed? right)
-              (handle-cmd gp-0 (-> self command 2) *mouse* (-> self manipulator))
-              )
-          (if (mouse-hold? right)
-              (handle-cmd gp-0 (-> self command 3) *mouse* (-> self manipulator))
-              )
-          (when (mouse-pressed? middle)
-            (let ((a2-37 (-> self command 4)))
-              (case a2-37
-                (((editable-command delete))
-                 (if (not (-> self left-handed))
-                     (editable-array-method-14 gp-0 (editable-command pick-yes-no) a2-37 "press x to confirm, square to cancel")
-                     (editable-array-method-14 gp-0 (editable-command pick-yes-no) a2-37 "press down to confirm, left to cancel")
-                     )
-                 )
-                (else
-                  (handle-cmd gp-0 a2-37 *mouse* (-> self manipulator))
-                  )
-                )
-              )
-            )
-          (if (mouse-hold? middle)
-              (handle-cmd gp-0 (-> self command 5) *mouse* (-> self manipulator))
-              )
-          )
-        )
-      )
-    )
   :code (behavior ()
     (until #f
       (suspend)
@@ -3080,6 +2631,7 @@
     )
   )
 
+;; definition for function editable-player-init
 ;; WARN: Return type mismatch object vs none.
 (defbehavior editable-player-init editable-player ((arg0 symbol))
   (set! *editable-temp-id* 0)
@@ -3144,34 +2696,39 @@
   (set! *external-cam-mode* 'pad-1)
   (matrix-identity! (-> self manipulator mat))
   (handle-cmd (-> self current) (editable-command update-game) (the-as mouse-info #f) (-> self manipulator))
-  ;; og:preserve-this automatically swap controller to pad1
-  (pc-treat-pad0-as-pad1 #t)
   (go-virtual idle)
   (none)
   )
 
+;; definition for function set-editable-name
 ;; WARN: Return type mismatch string vs object.
 (defun set-editable-name ((arg0 string))
   (copy-string<-string *editable-default-name* arg0)
   )
 
+;; definition for function select-editable-by-name
 (defun select-editable-by-name ((arg0 string))
   (send-event (ppointer->process *editable*) 'select-by-name arg0)
   )
 
+;; definition for symbol *editable-menu-context*, type debug-menu-context
 (define *editable-menu-context* (new 'debug 'debug-menu-context))
 
+;; failed to figure out what this is:
 (set! (-> *editable-menu-context* joypad-number) 1)
 
+;; definition for function editable-menu-command
 (defun editable-menu-command ((arg0 int))
   (send-event (ppointer->process *editable*) 'execute (/ arg0 8))
   (send-event (ppointer->process *editable*) 'menu 90)
   )
 
+;; definition for function editable-menu-command-no-close
 (defun editable-menu-command-no-close ((arg0 int))
   (send-event (ppointer->process *editable*) 'execute (/ arg0 8))
   )
 
+;; definition for function dm-region-tree-pick-func
 ;; WARN: Return type mismatch object vs symbol.
 (defun dm-region-tree-pick-func ((arg0 symbol) (arg1 debug-menu-msg))
   (when (= arg1 (debug-menu-msg press))
@@ -3189,6 +2746,7 @@
     )
   )
 
+;; definition for function dm-editable-flag-pick-func
 (defun dm-editable-flag-pick-func ((arg0 editable-flag) (arg1 debug-menu-msg))
   (when *editable*
     (let ((gp-0 (/ (the-as int arg0) 8)))
@@ -3218,6 +2776,7 @@
     )
   )
 
+;; definition for function dm-editable-filter0-pick-func
 (defun dm-editable-filter0-pick-func ((arg0 editable-filter) (arg1 debug-menu-msg))
   (when *editable*
     (let ((v1-1 (/ (the-as int arg0) 8)))
@@ -3229,6 +2788,7 @@
     )
   )
 
+;; definition for function dm-editable-filter1-pick-func
 (defun dm-editable-filter1-pick-func ((arg0 editable-filter) (arg1 debug-menu-msg))
   (when *editable*
     (let ((v1-1 (/ (the-as int arg0) 8)))
@@ -3240,6 +2800,7 @@
     )
   )
 
+;; definition for function dm-editable-light-float-func
 (defun dm-editable-light-float-func ((arg0 int) (arg1 debug-menu-msg) (arg2 float) (arg3 float))
   (cond
     ((not *editable*)
@@ -3323,6 +2884,7 @@
     )
   )
 
+;; definition for function dm-cam-externalize2
 (defun dm-cam-externalize2 ((arg0 symbol) (arg1 debug-menu-msg))
   (when (= arg1 (debug-menu-msg press))
     (cond
@@ -3351,6 +2913,7 @@
       )
   )
 
+;; definition for function dm-editable-boolean-toggle-pick-func
 ;; WARN: Return type mismatch float vs symbol.
 (defun dm-editable-boolean-toggle-pick-func ((arg0 int) (arg1 debug-menu-msg))
   (the-as symbol (cond
@@ -3369,6 +2932,7 @@
           )
   )
 
+;; definition for function editable-menu-context-make-menus
 (defun editable-menu-context-make-menus ((arg0 debug-menu-context))
   (debug-menu-make-from-template
     arg0
@@ -3556,8 +3120,10 @@
   arg0
   )
 
+;; failed to figure out what this is:
 (editable-menu-context-make-menus *editable-menu-context*)
 
+;; definition for function insert-sample-camera
 ;; WARN: Return type mismatch int vs object.
 (defun insert-sample-camera ((arg0 symbol))
   (cond
@@ -3624,6 +3190,7 @@
   0
   )
 
+;; definition for symbol *debug-hook*, type pair
 (define *debug-hook*
   (cons
     (lambda () (when (and *debug-segment* *manual-sample-point*)
@@ -3659,3 +3226,7 @@
     *debug-hook*
     )
   )
+
+
+
+

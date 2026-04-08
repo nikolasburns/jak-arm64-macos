@@ -1213,7 +1213,7 @@
   (set! (-> arg0 node-array length) 0)
   (set! (-> arg0 edge-array length) 0)
   (set! (-> arg0 visnode-array length) 0)
-  (set! (-> arg0 graph-type) (the-as basic (mysql-nav-graph-method-21 arg0)))
+  (set! (-> arg0 graph-type) (get-graph-type arg0 (the-as symbol arg1)))
   (let ((s3-0 (clear *temp-string*)))
     (format s3-0 "select nav_graph_id from nav_graph where name='~S'" arg1)
     (let ((a2-2 (sql-query s3-0)))

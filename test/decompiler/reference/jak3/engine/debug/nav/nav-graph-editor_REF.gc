@@ -1,35 +1,10 @@
 ;;-*-Lisp-*-
 (in-package goal)
 
-;; name: nav-graph-editor.gc
-;; name in dgo: nav-graph-editor
-;; dgos: GAME
-
-(declare-type nav-graph-editor process)
-(define-extern run-nav-graph-editor (function symbol symbol (pointer nav-graph-editor)))
-(define-extern get-nav-graph-editor (function nav-graph-editor))
-(define-extern exit-nav-graph-editor (function none))
-(define-extern *nav-graph-editor* (pointer nav-graph-editor))
-
-;; +++nav-com-type
-(defenum nav-com-type
-  :type uint32
-  (undo-move-node 0)
-  (undo-delete-edge 1)
-  (undo-delete-node 2)
-  (undo-new-node 3)
-  (undo-new-edge 4)
-  (undo-delete-visnode 5)
-  (undo-new-visnode 6)
-  )
-;; ---nav-com-type
-
-
-;; DECOMP BEGINS
-
 ;; this file is debug only
 (declare-file (debug))
 
+;; definition of type nav-graph-command
 (deftype nav-graph-command (structure)
   ((com-type  nav-com-type)
    (id        int32)
@@ -38,15 +13,45 @@
    )
   )
 
+;; definition for method 3 of type nav-graph-command
+(defmethod inspect ((this nav-graph-command))
+  (when (not this)
+    (set! this this)
+    (goto cfg-4)
+    )
+  (format #t "[~8x] ~A~%" this 'nav-graph-command)
+  (format #t "~1Tcom-type: ~D~%" (-> this com-type))
+  (format #t "~1Tid: ~D~%" (-> this id))
+  (format #t "~1Tindex: ~D~%" (-> this index))
+  (format #t "~1Tmove-vec: #<vector @ #x~X>~%" (-> this move-vec))
+  (label cfg-4)
+  this
+  )
 
+;; definition of type nav-graph-command-array
 (deftype nav-graph-command-array (inline-array-class)
   ((data  nav-graph-command  :inline :dynamic)
    )
   )
 
+;; definition for method 3 of type nav-graph-command-array
+(defmethod inspect ((this nav-graph-command-array))
+  (when (not this)
+    (set! this this)
+    (goto cfg-4)
+    )
+  (format #t "[~8x] ~A~%" this (-> this type))
+  (format #t "~1Tlength: ~D~%" (-> this length))
+  (format #t "~1Tallocated-length: ~D~%" (-> this allocated-length))
+  (format #t "~1Tdata[0] @ #x~X~%" (-> this data))
+  (label cfg-4)
+  this
+  )
 
+;; failed to figure out what this is:
 (set! (-> nav-graph-command-array heap-base) (the-as uint 32))
 
+;; definition of type nav-graph-editor
 (deftype nav-graph-editor (process)
   ((nav-graph            mysql-nav-graph)
    (mode                 symbol)
@@ -137,15 +142,59 @@
     )
   )
 
+;; definition for method 3 of type nav-graph-editor
+(defmethod inspect ((this nav-graph-editor))
+  (when (not this)
+    (set! this this)
+    (goto cfg-4)
+    )
+  (let ((t9-0 (method-of-type process inspect)))
+    (t9-0 this)
+    )
+  (format #t "~2Tnav-graph: ~A~%" (-> this nav-graph))
+  (format #t "~2Tmode: ~D~%" (-> this mode))
+  (format #t "~2Tcommand-id: ~D~%" (-> this command-id))
+  (format #t "~2Tmax-command: ~D~%" (-> this max-command))
+  (format #t "~2Tselected-index: ~D~%" (-> this selected-index))
+  (format #t "~2Tselected-dist: ~f~%" (-> this selected-dist))
+  (format #t "~2Tselected-node-edge?: ~A~%" (-> this selected-node-edge?))
+  (format #t "~2Tclosest-node: ~D~%" (-> this closest-node))
+  (format #t "~2Tdist-closest-node: ~f~%" (-> this dist-closest-node))
+  (format #t "~2Tclosest-edge: ~D~%" (-> this closest-edge))
+  (format #t "~2Tdist-closest-edge: ~f~%" (-> this dist-closest-edge))
+  (format #t "~2Tmouse-pos: #<vector @ #x~X>~%" (-> this mouse-pos))
+  (format #t "~2Tmouse-hit: #<vector @ #x~X>~%" (-> this mouse-hit))
+  (format #t "~2Tmouse-hit-pick: #<vector @ #x~X>~%" (-> this mouse-hit-pick))
+  (format #t "~2Tmouse-normal: #<vector @ #x~X>~%" (-> this mouse-normal))
+  (format #t "~2Tmouse-spos-hold: #<vector @ #x~X>~%" (-> this mouse-spos-hold))
+  (format #t "~2Tedge-src: ~D~%" (-> this edge-src))
+  (format #t "~2Tedge-dst: ~D~%" (-> this edge-dst))
+  (format #t "~2Tedge-visibility: ~D~%" (-> this edge-visibility))
+  (format #t "~2Tvehicle-edit-mode: ~A~%" (-> this vehicle-edit-mode))
+  (format #t "~2Thover-edit-mode: ~A~%" (-> this hover-edit-mode))
+  (format #t "~2Tplane-height: ~f~%" (-> this plane-height))
+  (format #t "~2Tplane-height-hold: ~f~%" (-> this plane-height-hold))
+  (format #t "~2Tminimap-make-mode: ~D~%" (-> this minimap-make-mode))
+  (format #t "~2Tclipping-dist: ~f~%" (-> this clipping-dist))
+  (format #t "~2Tdefault-node: #<mysql-nav-node @ #x~X>~%" (-> this default-node))
+  (format #t "~2Tdefault-edge: #<mysql-nav-edge @ #x~X>~%" (-> this default-edge))
+  (format #t "~2Tcommand-array: ~A~%" (-> this command-array))
+  (label cfg-4)
+  this
+  )
 
+;; definition for symbol *nav-graph-editor*, type (pointer nav-graph-editor)
 (define *nav-graph-editor* (the-as (pointer nav-graph-editor) #f))
 
+;; definition for function get-node-draw-position
+;; INFO: Used lq/sq
 (defun get-node-draw-position ((arg0 vector) (arg1 mysql-nav-node))
   (vector-copy! arg0 (-> arg1 position))
   (+! (-> arg0 y) (* 0.05 (- (-> (camera-pos) y) (-> arg0 y))))
   arg0
   )
 
+;; definition for method 66 of type nav-graph-editor
 ;; WARN: Return type mismatch symbol vs none.
 (defmethod nav-graph-editor-method-66 ((this nav-graph-editor) (arg0 symbol) (arg1 string))
   (case arg0
@@ -168,6 +217,7 @@
   (none)
   )
 
+;; definition for method 67 of type nav-graph-editor
 ;; WARN: Return type mismatch symbol vs none.
 (defmethod nav-graph-editor-method-67 ((this nav-graph-editor))
   (set! (-> this command-array length) 0)
@@ -175,6 +225,7 @@
   (none)
   )
 
+;; definition for method 10 of type nav-graph-editor
 (defmethod deactivate ((this nav-graph-editor))
   "Make a process dead, clean it up, remove it from the active pool, and return to dead pool."
   (set! *nav-graph-editor* (the-as (pointer nav-graph-editor) #f))
@@ -182,10 +233,12 @@
   (none)
   )
 
+;; definition for method 7 of type nav-graph-editor
 (defmethod relocate ((this nav-graph-editor) (offset int))
   (call-parent-method this offset)
   )
 
+;; definition for method 64 of type nav-graph-editor
 ;; WARN: Return type mismatch symbol vs none.
 (defmethod nav-graph-editor-method-64 ((this nav-graph-editor))
   (let ((v0-0 (not (-> this vehicle-edit-mode))))
@@ -199,12 +252,14 @@
   (none)
   )
 
+;; definition for method 65 of type nav-graph-editor
 ;; WARN: Return type mismatch symbol vs none.
 (defmethod nav-graph-editor-method-65 ((this nav-graph-editor))
   (set! (-> this hover-edit-mode) (not (-> this hover-edit-mode)))
   (none)
   )
 
+;; definition for method 58 of type nav-graph-editor
 (defmethod nav-graph-editor-method-58 ((this nav-graph-editor) (arg0 int))
   (when (not (-> this hover-edit-mode))
     (let ((gp-0 (-> this nav-graph node-array data arg0)))
@@ -246,6 +301,7 @@
     )
   )
 
+;; definition for method 31 of type nav-graph-editor
 (defmethod nav-graph-editor-method-31 ((this nav-graph-editor) (arg0 int))
   (let ((s3-0 (-> this nav-graph edge-array data arg0))
         (s4-0 (new 'stack-no-clear 'inline-array 'vector 5))
@@ -345,6 +401,8 @@
   #f
   )
 
+;; definition for method 34 of type nav-graph-editor
+;; WARN: Return type mismatch int vs none.
 (defmethod nav-graph-editor-method-34 ((this nav-graph-editor) (arg0 int))
   (let* ((gp-0 (-> this nav-graph edge-array data arg0))
          (a1-6 (-> this nav-graph node-array data (-> gp-0 runtime-node-id-1)))
@@ -382,6 +440,7 @@
   (none)
   )
 
+;; definition for method 32 of type nav-graph-editor
 (defmethod nav-graph-editor-method-32 ((this nav-graph-editor) (arg0 int))
   (let ((gp-0 (-> this nav-graph node-array data arg0))
         (s5-0 (new 'stack-no-clear 'vector))
@@ -419,6 +478,7 @@
     )
   )
 
+;; definition for method 30 of type nav-graph-editor
 (defmethod nav-graph-editor-method-30 ((this nav-graph-editor) (arg0 string) (arg1 string) (arg2 string))
   (format *stdcon* "~0K")
   (format *stdcon* "~3L~18S~18S~18S~%~0L" "Left button" "Middle button" "Right button")
@@ -426,6 +486,9 @@
   (format *stdcon* "~1K")
   )
 
+;; definition for method 29 of type nav-graph-editor
+;; INFO: Used lq/sq
+;; WARN: Return type mismatch int vs none.
 (defmethod nav-graph-editor-method-29 ((this nav-graph-editor))
   (local-vars
     (sv-224 int)
@@ -662,6 +725,7 @@
     )
   )
 
+;; definition for method 36 of type nav-graph-editor
 ;; WARN: Return type mismatch symbol vs none.
 (defmethod nav-graph-editor-method-36 ((this nav-graph-editor))
   (let ((gp-0 (-> this nav-graph)))
@@ -681,6 +745,9 @@
   (none)
   )
 
+;; definition for method 35 of type nav-graph-editor
+;; INFO: Used lq/sq
+;; WARN: Return type mismatch int vs none.
 (defmethod nav-graph-editor-method-35 ((this nav-graph-editor) (arg0 vector) (arg1 vector))
   (let ((v1-0 (new 'stack-no-clear 'inline-array 'vector 4)))
     (dotimes (a0-1 4)
@@ -711,6 +778,8 @@
   (none)
   )
 
+;; definition for method 37 of type nav-graph-editor
+;; INFO: Used lq/sq
 (defmethod nav-graph-editor-method-37 ((this nav-graph-editor))
   (with-pp
     (vector-copy! (-> this mouse-pos) (camera-pos))
@@ -981,11 +1050,15 @@
     )
   )
 
+;; definition for method 45 of type nav-graph-editor
+;; WARN: Return type mismatch int vs none.
 (defmethod nav-graph-editor-method-45 ((this nav-graph-editor))
   (set! (-> this selected-index) -1)
   (none)
   )
 
+;; definition for method 46 of type nav-graph-editor
+;; INFO: Used lq/sq
 ;; WARN: Return type mismatch symbol vs none.
 (defmethod nav-graph-editor-method-46 ((this nav-graph-editor))
   (let ((s5-0 (-> this nav-graph)))
@@ -1031,6 +1104,7 @@
   (none)
   )
 
+;; definition for method 48 of type nav-graph-editor
 ;; WARN: Return type mismatch symbol vs none.
 (defmethod nav-graph-editor-method-48 ((this nav-graph-editor))
   (set! (-> this closest-node) -1)
@@ -1055,6 +1129,8 @@
   (none)
   )
 
+;; definition for method 49 of type nav-graph-editor
+;; INFO: Used lq/sq
 (defmethod nav-graph-editor-method-49 ((this nav-graph-editor))
   (local-vars (sv-80 mysql-nav-node) (sv-96 vector))
   (set! (-> this closest-edge) -1)
@@ -1095,6 +1171,8 @@
   #f
   )
 
+;; definition for method 47 of type nav-graph-editor
+;; INFO: Used lq/sq
 (defmethod nav-graph-editor-method-47 ((this nav-graph-editor))
   (local-vars
     (sv-160 mysql-nav-node)
@@ -1185,6 +1263,8 @@
     )
   )
 
+;; definition for method 33 of type nav-graph-editor
+;; INFO: Used lq/sq
 (defmethod nav-graph-editor-method-33 ((this nav-graph-editor) (arg0 int) (arg1 int))
   (rlet ((vf0 :class vf)
          (vf4 :class vf)
@@ -1255,11 +1335,13 @@
     )
   )
 
+;; definition for method 51 of type nav-graph-editor
 (defmethod inc-cmd-id! ((this nav-graph-editor))
   (+! (-> this command-id) 1)
   (-> this command-id)
   )
 
+;; definition for method 52 of type nav-graph-editor
 (defmethod alloc-new-cmd! ((this nav-graph-editor) (arg0 int))
   (let* ((v1-1 (-> this command-array length))
          (v0-0 (-> this command-array data v1-1))
@@ -1272,16 +1354,20 @@
     )
   )
 
+;; definition for method 53 of type nav-graph-editor
 (defmethod get-last-cmd ((this nav-graph-editor))
   (-> this command-array data (+ (-> this command-array length) -1))
   )
 
+;; definition for method 54 of type nav-graph-editor
+;; WARN: Return type mismatch int vs none.
 (defmethod nav-graph-editor-method-54 ((this nav-graph-editor))
   (+! (-> this command-array length) -1)
   (set! (-> this max-command) (-> this command-array length))
   (none)
   )
 
+;; definition for method 62 of type nav-graph-editor
 ;; WARN: new jak 2 until loop case, check carefully
 (defmethod nav-graph-editor-method-62 ((this nav-graph-editor))
   (if (zero? (-> this command-array length))
@@ -1343,6 +1429,9 @@
   #f
   )
 
+;; definition for method 55 of type nav-graph-editor
+;; INFO: Used lq/sq
+;; WARN: Return type mismatch int vs none.
 (defmethod nav-graph-editor-method-55 ((this nav-graph-editor))
   (let ((gp-0 (alloc-new-node! (-> this nav-graph))))
     (when (!= gp-0 -1)
@@ -1365,6 +1454,8 @@
   (none)
   )
 
+;; definition for method 57 of type nav-graph-editor
+;; WARN: Return type mismatch int vs none.
 (defmethod nav-graph-editor-method-57 ((this nav-graph-editor) (arg0 int) (arg1 int))
   (let ((s5-0 (indexof-visnode (-> this nav-graph) arg0 arg1)))
     (if (= s5-0 -1)
@@ -1378,6 +1469,7 @@
   (none)
   )
 
+;; definition for method 56 of type nav-graph-editor
 (defmethod nav-graph-editor-method-56 ((this nav-graph-editor))
   (let ((gp-0 (alloc-new-edge! (-> this nav-graph))))
     (when (!= gp-0 -1)
@@ -1401,6 +1493,8 @@
     )
   )
 
+;; definition for method 61 of type nav-graph-editor
+;; WARN: Return type mismatch int vs none.
 ;; WARN: Function (method 61 nav-graph-editor) has a return type of none, but the expression builder found a return statement.
 (defmethod nav-graph-editor-method-61 ((this nav-graph-editor) (arg0 int) (arg1 int))
   (case (indexof-visnode (-> this nav-graph) arg0 arg1)
@@ -1419,6 +1513,8 @@
   (none)
   )
 
+;; definition for method 59 of type nav-graph-editor
+;; WARN: Return type mismatch int vs none.
 (defmethod nav-graph-editor-method-59 ((this nav-graph-editor) (arg0 int))
   (inc-cmd-id! this)
   (let ((s5-0 (-> this nav-graph node-array data arg0)))
@@ -1450,6 +1546,8 @@
   (none)
   )
 
+;; definition for method 60 of type nav-graph-editor
+;; WARN: Return type mismatch int vs none.
 (defmethod nav-graph-editor-method-60 ((this nav-graph-editor) (arg0 int))
   (inc-cmd-id! this)
   (let ((s5-0 (-> this nav-graph edge-array data arg0)))
@@ -1496,6 +1594,7 @@
   (none)
   )
 
+;; definition for method 63 of type nav-graph-editor
 ;; WARN: Return type mismatch pad-buttons vs none.
 (defmethod nav-graph-editor-method-63 ((this nav-graph-editor))
   (if (cpad-pressed? 0 triangle)
@@ -1506,6 +1605,7 @@
   (none)
   )
 
+;; definition for method 50 of type nav-graph-editor
 ;; WARN: Return type mismatch pad-buttons vs none.
 (defmethod nav-graph-editor-method-50 ((this nav-graph-editor))
   (if (cpad-pressed? 0 up)
@@ -1531,6 +1631,8 @@
   (none)
   )
 
+;; definition for method 38 of type nav-graph-editor
+;; INFO: Used lq/sq
 ;; WARN: Return type mismatch object vs none.
 (defmethod nav-graph-editor-method-38 ((this nav-graph-editor))
   (nav-graph-editor-method-37 this)
@@ -1558,6 +1660,7 @@
   (none)
   )
 
+;; failed to figure out what this is:
 (defstate move-node (nav-graph-editor)
   :virtual #t
   :enter (behavior ()
@@ -1585,6 +1688,7 @@
     )
   )
 
+;; failed to figure out what this is:
 (defstate adjust-plane (nav-graph-editor)
   :virtual #t
   :trans (behavior ()
@@ -1609,6 +1713,7 @@
     )
   )
 
+;; failed to figure out what this is:
 (defstate move-plane (nav-graph-editor)
   :virtual #t
   :enter (behavior ()
@@ -1637,6 +1742,7 @@
     )
   )
 
+;; definition for method 41 of type nav-graph-editor
 ;; WARN: Return type mismatch object vs none.
 (defmethod nav-graph-editor-method-41 ((this nav-graph-editor))
   (nav-graph-editor-method-45 this)
@@ -1698,6 +1804,7 @@
   (none)
   )
 
+;; failed to figure out what this is:
 (defstate create-edge (nav-graph-editor)
   :virtual #t
   :enter (behavior ()
@@ -1725,6 +1832,7 @@
     )
   )
 
+;; definition for method 40 of type nav-graph-editor
 ;; WARN: Return type mismatch object vs none.
 (defmethod nav-graph-editor-method-40 ((this nav-graph-editor))
   (nav-graph-editor-method-45 this)
@@ -1748,6 +1856,7 @@
   (none)
   )
 
+;; failed to figure out what this is:
 (defstate edit-edge (nav-graph-editor)
   :virtual #t
   :enter (behavior ()
@@ -1762,6 +1871,7 @@
     )
   )
 
+;; failed to figure out what this is:
 (defstate adjust-edge-visibility (nav-graph-editor)
   :virtual #t
   :enter (behavior ()
@@ -1799,6 +1909,7 @@
     )
   )
 
+;; failed to figure out what this is:
 (defstate adjust-node-angle (nav-graph-editor)
   :virtual #t
   :enter (behavior ()
@@ -1823,6 +1934,7 @@
     )
   )
 
+;; failed to figure out what this is:
 (defstate adjust-node-radius (nav-graph-editor)
   :virtual #t
   :enter (behavior ()
@@ -1850,6 +1962,7 @@
     )
   )
 
+;; failed to figure out what this is:
 (defstate adjust-edge-width (nav-graph-editor)
   :virtual #t
   :enter (behavior ()
@@ -1877,6 +1990,7 @@
     )
   )
 
+;; failed to figure out what this is:
 (defstate adjust-edge-density (nav-graph-editor)
   :virtual #t
   :enter (behavior ()
@@ -1908,6 +2022,7 @@
     )
   )
 
+;; definition for method 42 of type nav-graph-editor
 ;; WARN: Return type mismatch object vs none.
 (defmethod nav-graph-editor-method-42 ((this nav-graph-editor))
   (nav-graph-editor-method-45 this)
@@ -1944,6 +2059,7 @@
   (none)
   )
 
+;; failed to figure out what this is:
 (defstate adjust-it (nav-graph-editor)
   :virtual #t
   :enter (behavior ()
@@ -1967,6 +2083,7 @@
     )
   )
 
+;; definition for method 43 of type nav-graph-editor
 ;; WARN: Return type mismatch object vs none.
 (defmethod nav-graph-editor-method-43 ((this nav-graph-editor))
   (nav-graph-editor-method-45 this)
@@ -2031,6 +2148,7 @@
   (none)
   )
 
+;; failed to figure out what this is:
 (defstate adjust-minimap (nav-graph-editor)
   :virtual #t
   :enter (behavior ()
@@ -2065,6 +2183,7 @@
     )
   )
 
+;; failed to figure out what this is:
 (defstate draw-closest-minimap (nav-graph-editor)
   :virtual #t
   :enter (behavior ()
@@ -2129,6 +2248,7 @@
     )
   )
 
+;; definition for method 39 of type nav-graph-editor
 ;; WARN: Return type mismatch object vs none.
 (defmethod nav-graph-editor-method-39 ((this nav-graph-editor))
   (nav-graph-editor-method-45 this)
@@ -2170,6 +2290,7 @@
   (none)
   )
 
+;; failed to figure out what this is:
 (defstate create (nav-graph-editor)
   :virtual #t
   :enter (behavior ()
@@ -2194,6 +2315,7 @@
     )
   )
 
+;; definition for method 44 of type nav-graph-editor
 ;; WARN: Return type mismatch object vs none.
 (defmethod nav-graph-editor-method-44 ((this nav-graph-editor))
   (if (not (mouse-hold? right))
@@ -2202,6 +2324,7 @@
   (none)
   )
 
+;; failed to figure out what this is:
 (defstate create-pov (nav-graph-editor)
   :virtual #t
   :enter (behavior ()
@@ -2223,6 +2346,7 @@
     )
   )
 
+;; definition for function nav-graph-editor-init-by-other
 (defbehavior nav-graph-editor-init-by-other nav-graph-editor ((arg0 string) (arg1 symbol))
   (add-setting! 'mouse #t 0.0 0)
   (add-setting! 'cursor #t 0.0 0)
@@ -2268,36 +2392,43 @@
   (go-virtual create)
   )
 
+;; definition for function run-nav-graph-editor
+;; WARN: Return type mismatch (pointer process) vs (pointer nav-graph-editor).
 (defun run-nav-graph-editor ((arg0 symbol) (arg1 symbol))
-  (when (not *nav-graph-editor*)
-    (let ((s4-0 (process-spawn
-                  nav-graph-editor
-                  arg0
-                  (if arg1
-                      arg1
-                      'unknown
-                      )
-                  :name "nav-graph-editor"
+  (the-as
+    (pointer nav-graph-editor)
+    (when (not *nav-graph-editor*)
+      (let ((s4-0 (process-spawn
+                    nav-graph-editor
+                    arg0
+                    (if arg1
+                        arg1
+                        'unknown
+                        )
+                    :name "nav-graph-editor"
+                    )
                   )
+            )
+        (when arg1
+          (let ((v1-4 *nav-graph-editor*))
+            (if v1-4
+                (nav-graph-editor-method-66 (-> v1-4 0) arg0 (the-as string arg1))
                 )
+            )
           )
-      (when arg1
-        (let ((v1-4 *nav-graph-editor*))
-          (if v1-4
-              (nav-graph-editor-method-66 (-> v1-4 0) arg0 (the-as string arg1))
-              )
-          )
+        s4-0
         )
-      s4-0
       )
     )
   )
 
+;; definition for function get-nav-graph-editor
 ;; WARN: Return type mismatch process vs nav-graph-editor.
 (defun get-nav-graph-editor ()
   (the-as nav-graph-editor (ppointer->process *nav-graph-editor*))
   )
 
+;; definition for function exit-nav-graph-editor
 (defun exit-nav-graph-editor ()
   (if *nav-graph-editor*
       (deactivate (ppointer->process *nav-graph-editor*))
@@ -2305,6 +2436,7 @@
   (none)
   )
 
+;; definition for function nav-graph-set-level
 ;; WARN: Return type mismatch symbol vs object.
 (defun nav-graph-set-level ((arg0 symbol))
   (let ((v1-0 (ppointer->process *nav-graph-editor*)))
@@ -2320,6 +2452,7 @@
     )
   )
 
+;; definition for function set-minimap-edge-flag
 ;; WARN: Return type mismatch mysql-save-flag vs none.
 (defun set-minimap-edge-flag ((arg0 nav-minimap-edge-flag))
   (let ((v1-0 (ppointer->process *nav-graph-editor*)))
@@ -2344,6 +2477,8 @@
   (none)
   )
 
+;; definition for function set-vehicle-edit-mode
+;; WARN: Return type mismatch int vs none.
 (defun set-vehicle-edit-mode ((arg0 symbol))
   (let ((v1-0 (ppointer->process *nav-graph-editor*)))
     (when v1-0
@@ -2358,6 +2493,7 @@
   (none)
   )
 
+;; definition for function translate-nav-graph
 (defun translate-nav-graph ((arg0 float) (arg1 float) (arg2 float))
   (when (ppointer->process *nav-graph-editor*)
     (let ((v1-2 (ppointer->process *nav-graph-editor*)))
@@ -2374,6 +2510,7 @@
     )
   )
 
+;; definition for function update-nav-meshes
 (defun update-nav-meshes ()
   (when (ppointer->process *nav-graph-editor*)
     (let ((gp-0 (ppointer->process *nav-graph-editor*)))
@@ -2390,6 +2527,7 @@
     )
   )
 
+;; definition for function delete-node-nav-mesh
 ;; WARN: Return type mismatch symbol vs none.
 (defun delete-node-nav-mesh ((arg0 int))
   (when (ppointer->process *nav-graph-editor*)
@@ -2410,6 +2548,8 @@
   (none)
   )
 
+;; definition for function smooth-nav-graph
+;; INFO: Used lq/sq
 (defun smooth-nav-graph ((arg0 string))
   (local-vars
     (sv-96 int)
@@ -2512,6 +2652,8 @@
     )
   )
 
+;; definition for function update-height
+;; INFO: Used lq/sq
 (defun update-height ((arg0 string))
   (let* ((v1-0 *nav-graph-editor*)
          (v1-2 (-> (the-as nav-graph-editor (if v1-0
@@ -2537,6 +2679,8 @@
   #f
   )
 
+;; definition for function update-width
+;; INFO: Used lq/sq
 (defun update-width ((arg0 string))
   (local-vars (sv-16 (array entity-nav-mesh)) (sv-32 int) (sv-48 uint) (sv-64 entity-nav-mesh))
   (let* ((v1-0 *nav-graph-editor*)

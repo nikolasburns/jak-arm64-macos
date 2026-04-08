@@ -1,26 +1,10 @@
 ;;-*-Lisp-*-
 (in-package goal)
 
-;; name: visvol-edit.gc
-;; name in dgo: visvol-edit
-;; dgos: GAME
-
-;; +++visvol-edit-func
-(defenum visvol-edit-func
-  :type uint64
-  (visvol-positive 0)
-  (visvol-negative 1)
-  (adjust-sphere 2)
-  (adjust-vis-distance 3)
-  )
-;; ---visvol-edit-func
-
-
-;; DECOMP BEGINS
-
 ;; this file is debug only
 (declare-file (debug))
 
+;; definition of type visvol-edit-info
 (deftype visvol-edit-info (structure)
   ((editing       symbol)
    (current-func  visvol-edit-func)
@@ -33,7 +17,21 @@
     )
   )
 
+;; definition for method 3 of type visvol-edit-info
+(defmethod inspect ((this visvol-edit-info))
+  (when (not this)
+    (set! this this)
+    (goto cfg-4)
+    )
+  (format #t "[~8x] ~A~%" this 'visvol-edit-info)
+  (format #t "~1Tediting: ~A~%" (-> this editing))
+  (format #t "~1Tcurrent-func: ~D~%" (-> this current-func))
+  (format #t "~1Tanalog-func: ~D~%" (-> this analog-func))
+  (label cfg-4)
+  this
+  )
 
+;; definition of type visvol-editor
 (deftype visvol-editor (process)
   ((proc  handle)
    )
@@ -42,7 +40,21 @@
     )
   )
 
+;; definition for method 3 of type visvol-editor
+(defmethod inspect ((this visvol-editor))
+  (when (not this)
+    (set! this this)
+    (goto cfg-4)
+    )
+  (let ((t9-0 (method-of-type process inspect)))
+    (t9-0 this)
+    )
+  (format #t "~2Tproc: ~D~%" (-> this proc))
+  (label cfg-4)
+  this
+  )
 
+;; definition for method 9 of type visvol-edit-info
 ;; WARN: Return type mismatch int vs object.
 (defmethod handle-pad-input ((this visvol-edit-info))
   (if (cpad-pressed? 0 up)
@@ -71,6 +83,8 @@
     )
   )
 
+;; definition for method 11 of type visvol-edit-info
+;; WARN: Return type mismatch int vs none.
 ;; WARN: Function (method 11 visvol-edit-info) has a return type of none, but the expression builder found a return statement.
 (defmethod set-origin-joint-idx! ((this visvol-edit-info) (arg0 process-drawable))
   (if (or (not arg0) (!= (-> this analog-func) 2))
@@ -112,6 +126,8 @@
   (none)
   )
 
+;; definition for method 10 of type visvol-edit-info
+;; INFO: Used lq/sq
 ;; WARN: Return type mismatch int vs object.
 (defmethod draw-menu ((this visvol-edit-info) (arg0 process-drawable))
   (when (cpad-pressed? 0 l2)
@@ -426,10 +442,13 @@
   0
   )
 
+;; definition for symbol *visvol-edit-info*, type visvol-edit-info
 (define *visvol-edit-info* (the-as visvol-edit-info 0))
 
+;; definition for symbol *visvol-edit-info*, type visvol-edit-info
 (define *visvol-edit-info* (new 'static 'visvol-edit-info :editing #t))
 
+;; failed to figure out what this is:
 (defstate idle (visvol-editor)
   :virtual #t
   :enter (behavior ()
@@ -449,17 +468,20 @@
   :code sleep-code
   )
 
+;; definition for function visvol-editor-init-by-other
 (defbehavior visvol-editor-init-by-other visvol-editor ((arg0 handle))
   (set! (-> self proc) arg0)
   (go-virtual idle)
   )
 
+;; definition for function stop-visvol-edit
 ;; WARN: Return type mismatch int vs object.
 (defun stop-visvol-edit ()
   (kill-by-type visvol-editor *active-pool*)
   0
   )
 
+;; definition for function visvol-edit
 ;; WARN: Return type mismatch int vs object.
 (defun visvol-edit ((arg0 string))
   (stop-visvol-edit)
@@ -480,3 +502,7 @@
     )
   0
   )
+
+
+
+
