@@ -1,28 +1,10 @@
 ;;-*-Lisp-*-
 (in-package goal)
 
-;; name: pilot-recorder.gc
-;; name in dgo: pilot-recorder
-;; dgos: WASLEAPR, DESRALLY, DESTRACK
-
-;; +++pilrec-sample-flag
-(defenum pilrec-sample-flag
-  :type uint8
-  :bitfield #t
-  (square 0)
-  (l1 1)
-  (x 2)
-  )
-;; ---pilrec-sample-flag
-
-(declare-type pilot-recorder-samples basic)
-(define-extern *pilot-recorder-samples* pilot-recorder-samples)
-
-;; DECOMP BEGINS
-
 ;; this file is debug only
 (declare-file (debug))
 
+;; definition of type pilrec-sample
 (deftype pilrec-sample (structure)
   ((sample-time  time-frame)
    (pos          vector      :inline)
@@ -34,13 +16,43 @@
    )
   )
 
+;; definition for method 3 of type pilrec-sample
+(defmethod inspect ((this pilrec-sample))
+  (when (not this)
+    (set! this this)
+    (goto cfg-4)
+    )
+  (format #t "[~8x] ~A~%" this 'pilrec-sample)
+  (format #t "~1Tsample-time: ~D~%" (-> this sample-time))
+  (format #t "~1Tpos: ~`vector`P~%" (-> this pos))
+  (format #t "~1Tquat: #<quaternion @ #x~X>~%" (-> this quat))
+  (format #t "~1Tstick-x: ~f~%" (-> this stick-x))
+  (format #t "~1Tstick-y: ~f~%" (-> this stick-y))
+  (format #t "~1Tthrottle: ~f~%" (-> this throttle))
+  (format #t "~1Tflags: ~D~%" (-> this flags))
+  (label cfg-4)
+  this
+  )
 
+;; definition of type pilot-recorder-samples
 (deftype pilot-recorder-samples (basic)
   ((samples  (inline-array pilrec-sample))
    )
   )
 
+;; definition for method 3 of type pilot-recorder-samples
+(defmethod inspect ((this pilot-recorder-samples))
+  (when (not this)
+    (set! this this)
+    (goto cfg-4)
+    )
+  (format #t "[~8x] ~A~%" this (-> this type))
+  (format #t "~1Tsamples: #x~X~%" (-> this samples))
+  (label cfg-4)
+  this
+  )
 
+;; failed to figure out what this is:
 (when (or (not *pilot-recorder-samples*) (zero? *pilot-recorder-samples*))
   (let ((gp-0 (new 'debug 'pilot-recorder-samples)))
     (set! *pilot-recorder-samples* gp-0)
@@ -48,6 +60,7 @@
     )
   )
 
+;; definition of type pilot-recorder
 (deftype pilot-recorder (process)
   ((info                  race-info)
    (mesh                  race-mesh)
@@ -86,7 +99,33 @@
     )
   )
 
+;; definition for method 3 of type pilot-recorder
+(defmethod inspect ((this pilot-recorder))
+  (when (not this)
+    (set! this this)
+    (goto cfg-4)
+    )
+  (let ((t9-0 (method-of-type process inspect)))
+    (t9-0 this)
+    )
+  (format #t "~2Tinfo: ~A~%" (-> this info))
+  (format #t "~2Tmesh: ~A~%" (-> this mesh))
+  (format #t "~2Tselect-race: ~D~%" (-> this select-race))
+  (format #t "~2Tpath-num: ~D~%" (-> this path-num))
+  (format #t "~2Tsample-count: ~D~%" (-> this sample-count))
+  (format #t "~2Tsamples: #x~X~%" (-> this samples))
+  (format #t "~2Tstate-time: ~D~%" (-> this state-time))
+  (format #t "~2Tstart-time: ~D~%" (-> this start-time))
+  (format #t "~2Tstart-record-plane: #<plane @ #x~X>~%" (-> this start-record-plane))
+  (format #t "~2Tstart-record-center: #<vector @ #x~X>~%" (-> this start-record-center))
+  (format #t "~2Tfinish-record-plane: #<plane @ #x~X>~%" (-> this finish-record-plane))
+  (format #t "~2Tfinish-record-center: #<vector @ #x~X>~%" (-> this finish-record-center))
+  (format #t "~2Tprev-pos: #<vector @ #x~X>~%" (-> this prev-pos))
+  (label cfg-4)
+  this
+  )
 
+;; definition for function delete-race-path
 ;; WARN: Return type mismatch int vs object.
 (defun delete-race-path ((arg0 int) (arg1 int))
   (let ((s5-0 (-> *race-info-array* arg0 path-group-name)))
@@ -109,8 +148,11 @@
   0
   )
 
+;; definition for symbol *pilot-recorder*, type (pointer pilot-recorder)
 (define *pilot-recorder* (the-as (pointer pilot-recorder) #f))
 
+;; definition for method 28 of type pilot-recorder
+;; INFO: Used lq/sq
 ;; WARN: Return type mismatch int vs pilrec-sample-flag.
 (defmethod record-input-sample! ((this pilot-recorder) (arg0 pilrec-sample))
   (let ((v1-0 *target*))
@@ -157,6 +199,7 @@
     )
   )
 
+;; definition for method 29 of type pilot-recorder
 ;; WARN: Return type mismatch pilrec-sample-flag vs none.
 (defmethod lerp-samples! ((this pilot-recorder)
                          (arg0 pilrec-sample)
@@ -178,6 +221,7 @@
   (none)
   )
 
+;; definition for method 23 of type pilot-recorder
 (defmethod passed-starting-line? ((this pilot-recorder) (arg0 vector) (arg1 vector))
   (when (and (< (vector4-dot arg0 (the-as vector (-> this start-record-plane))) 0.0)
              (>= (vector4-dot arg1 (the-as vector (-> this start-record-plane))) 0.0)
@@ -198,6 +242,7 @@
     )
   )
 
+;; definition for method 24 of type pilot-recorder
 (defmethod recording-finished? ((this pilot-recorder) (arg0 vector) (arg1 vector))
   (when (and (< (vector4-dot arg0 (the-as vector (-> this finish-record-plane))) 0.0)
              (>= (vector4-dot arg1 (the-as vector (-> this finish-record-plane))) 0.0)
@@ -218,6 +263,9 @@
     )
   )
 
+;; definition for method 25 of type pilot-recorder
+;; INFO: Used lq/sq
+;; WARN: Return type mismatch int vs none.
 (defmethod draw-starting-line ((this pilot-recorder) (arg0 vector) (arg1 vector))
   (let ((gp-0 (new 'stack-no-clear 'inline-array 'vector 2)))
     (vector-copy! (-> gp-0 0) arg0)
@@ -247,6 +295,9 @@
   (none)
   )
 
+;; definition for method 26 of type pilot-recorder
+;; INFO: Used lq/sq
+;; WARN: Return type mismatch int vs none.
 (defmethod draw-recorded-path ((this pilot-recorder))
   (let ((s2-0 0)
         (s5-0 1)
@@ -286,6 +337,8 @@
   (none)
   )
 
+;; definition for method 27 of type pilot-recorder
+;; INFO: Used lq/sq
 ;; WARN: Return type mismatch symbol vs none.
 (defmethod pilot-recorder-method-27 ((this pilot-recorder))
   (let ((gp-0 (new 'stack-no-clear 'matrix))
@@ -342,6 +395,8 @@
   (none)
   )
 
+;; definition for method 22 of type pilot-recorder
+;; INFO: Used lq/sq
 (defmethod pilot-recorder-method-22 ((this pilot-recorder))
   (let* ((s5-0 (-> this samples 0))
          (s4-0 (+ (-> this sample-count) -45))
@@ -379,6 +434,8 @@
   #f
   )
 
+;; definition for method 30 of type pilot-recorder
+;; INFO: Used lq/sq
 (defmethod save-to-db! ((this pilot-recorder))
   (local-vars (sv-16 pilrec-sample-flag))
   (let ((gp-0 (clear *temp-string*))
@@ -458,6 +515,7 @@
   #t
   )
 
+;; failed to figure out what this is:
 (defstate idle (pilot-recorder)
   :virtual #t
   :trans (behavior ()
@@ -470,6 +528,7 @@
   :code sleep-code
   )
 
+;; failed to figure out what this is:
 (defstate active (pilot-recorder)
   :virtual #t
   :enter (behavior ()
@@ -498,6 +557,7 @@
   :code sleep-code
   )
 
+;; failed to figure out what this is:
 (defstate recording (pilot-recorder)
   :virtual #t
   :enter (behavior ()
@@ -560,6 +620,7 @@
   :code sleep-code
   )
 
+;; failed to figure out what this is:
 (defstate finished (pilot-recorder)
   :virtual #t
   :enter (behavior ()
@@ -591,6 +652,7 @@
   :code sleep-code
   )
 
+;; failed to figure out what this is:
 (defstate save (pilot-recorder)
   :virtual #t
   :enter (behavior ()
@@ -610,6 +672,7 @@
   :code sleep-code
   )
 
+;; failed to figure out what this is:
 (defstate fail-save (pilot-recorder)
   :virtual #t
   :enter (behavior ()
@@ -626,6 +689,7 @@
   :code sleep-code
   )
 
+;; failed to figure out what this is:
 (defstate fail-full (pilot-recorder)
   :virtual #t
   :enter (behavior ()
@@ -642,11 +706,14 @@
   :code sleep-code
   )
 
+;; failed to figure out what this is:
 (defstate die-fast (pilot-recorder)
   :virtual #t
   :code nothing
   )
 
+;; definition for function pilot-recorder-init-by-other
+;; INFO: Used lq/sq
 (defbehavior pilot-recorder-init-by-other pilot-recorder ((arg0 uint) (arg1 int))
   (set! (-> self select-race) arg0)
   (set! (-> self path-num) arg1)
@@ -668,6 +735,8 @@
   (go-virtual idle)
   )
 
+;; definition for function start-pilot-recorder
+;; WARN: Return type mismatch int vs none.
 (defun start-pilot-recorder ()
   (process-spawn pilot-recorder *select-race* *select-race-path* :name "pilot-recorder" :to *target*)
   0

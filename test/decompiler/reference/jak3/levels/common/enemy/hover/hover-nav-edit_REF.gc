@@ -1,15 +1,11 @@
 ;;-*-Lisp-*-
 (in-package goal)
 
-;; name: hover-nav-edit.gc
-;; name in dgo: hover-nav-edit
-;; dgos: TEMA, SEA, FACC, LFORM, FACD, LPATK, TOWERA, PRECA, VOCA
-
-;; DECOMP BEGINS
-
 ;; this file is debug only
 (declare-file (debug))
 
+;; definition for function probe-for-clear-collision?
+;; INFO: Used lq/sq
 (defun probe-for-clear-collision? ((arg0 vector) (arg1 vector))
   (let ((s5-0 (new 'stack-no-clear 'collide-query)))
     (vector-copy! (-> s5-0 start-pos) arg0)
@@ -59,6 +55,8 @@
     )
   )
 
+;; definition for function hover-nav-graph-process-points
+;; WARN: Return type mismatch int vs none.
 (defun hover-nav-graph-process-points ()
   (local-vars (v1-10 symbol))
   (let ((v1-0 (get-nav-graph-editor)))
@@ -123,6 +121,8 @@
   (none)
   )
 
+;; definition for function hover-nav-graph-output
+;; INFO: Used lq/sq
 ;; WARN: Return type mismatch file-stream vs object.
 (defun hover-nav-graph-output ((arg0 string))
   (local-vars
@@ -258,6 +258,7 @@
     )
   )
 
+;; definition for symbol *axes-table*, type (array vector)
 (define *axes-table* (new 'static 'boxed-array :type vector
                        (new 'static 'vector :x 1.0 :w 1.0)
                        (new 'static 'vector :y 1.0 :w 1.0)
@@ -265,6 +266,7 @@
                        )
         )
 
+;; definition of type hover-nav-bsp-point
 (deftype hover-nav-bsp-point (list-node)
   ((index  int32)
    (pos    vector  :inline)
@@ -274,6 +276,7 @@
     )
   )
 
+;; definition for method 3 of type hover-nav-bsp-point
 (defmethod inspect ((this hover-nav-bsp-point))
   (when (not this)
     (set! this this)
@@ -288,6 +291,7 @@
   this
   )
 
+;; definition for method 0 of type hover-nav-bsp-point
 ;; WARN: Return type mismatch structure vs hover-nav-bsp-point.
 (defmethod new hover-nav-bsp-point ((allocation symbol) (type-to-make type))
   (let ((t9-0 (method-of-type structure new))
@@ -302,6 +306,7 @@
     )
   )
 
+;; definition of type hover-nav-bsp-node
 (deftype hover-nav-bsp-node (structure)
   ((split-plane  vector  :inline)
    (point-list   hover-nav-bsp-point)
@@ -315,6 +320,7 @@
     )
   )
 
+;; definition for method 3 of type hover-nav-bsp-node
 (defmethod inspect ((this hover-nav-bsp-node))
   (when (not this)
     (set! this this)
@@ -329,6 +335,7 @@
   this
   )
 
+;; definition for method 0 of type hover-nav-bsp-node
 ;; WARN: Return type mismatch structure vs hover-nav-bsp-node.
 (defmethod new hover-nav-bsp-node ((allocation symbol) (type-to-make type))
   (let ((t9-0 (method-of-type structure new))
@@ -344,11 +351,13 @@
     )
   )
 
+;; definition of type hover-nav-bsp
 (deftype hover-nav-bsp (structure)
   ((root  hover-nav-bsp-node)
    )
   )
 
+;; definition for method 3 of type hover-nav-bsp
 (defmethod inspect ((this hover-nav-bsp))
   (when (not this)
     (set! this this)
@@ -360,6 +369,8 @@
   this
   )
 
+;; definition for method 9 of type hover-nav-bsp-node
+;; WARN: Return type mismatch int vs none.
 (defmethod hover-nav-bsp-node-method-9 ((this hover-nav-bsp-node))
   (let ((v1-0 (-> this split-plane)))
     (format #t "((~,,1f ~,,1f ~,,1f ~m)~% " (-> v1-0 x) (-> v1-0 y) (-> v1-0 z) (-> v1-0 w))
@@ -390,6 +401,9 @@
   (none)
   )
 
+;; definition for method 10 of type hover-nav-bsp-node
+;; INFO: Used lq/sq
+;; WARN: Return type mismatch int vs none.
 (defmethod hover-nav-bsp-node-method-10 ((this hover-nav-bsp-node) (arg0 int))
   (when (-> this point-list)
     (format 0 "build-bsp: ")
@@ -542,8 +556,11 @@
   (none)
   )
 
+;; definition for symbol *hover-bsp*, type hover-nav-bsp
 (define *hover-bsp* (the-as hover-nav-bsp #f))
 
+;; definition for function hover-nav-graph-output-bsp
+;; INFO: Used lq/sq
 (defun hover-nav-graph-output-bsp ()
   (let ((v1-0 (get-nav-graph-editor)))
     (when v1-0
@@ -603,6 +620,8 @@
     )
   )
 
+;; definition for function hover-nav-network-build-bsp
+;; INFO: Used lq/sq
 (defun hover-nav-network-build-bsp ((arg0 (array hover-nav-bsp-point)))
   (let ((gp-0 (new 'global 'hover-nav-bsp)))
     (let ((s4-0 (-> arg0 length))
@@ -652,6 +671,7 @@
     )
   )
 
+;; definition for function hover-nav-bsp-output
 ;; WARN: Return type mismatch object vs none.
 (defun hover-nav-bsp-output ((arg0 hover-nav-bsp))
   (format #t "(")
@@ -659,3 +679,7 @@
   (format #t ")~%")
   (none)
   )
+
+
+
+
