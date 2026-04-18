@@ -63,7 +63,6 @@
 ;; WARN: Stack slot offset 16 signed mismatch
 ;; INFO: Return type mismatch vector4w vs pointer.
 (defun render-eyes ((arg0 dma-buffer) (arg1 eye-control) (arg2 int))
-  (local-vars (sv-16 float))
   (let ((s4-0 32)
         (s3-0 (+ (* arg2 32) 32))
         (s2-0 (* arg2 32))
@@ -71,8 +70,8 @@
     (let ((f28-0 (* 16.0 (+ (the float (+ s4-0 16)) (* 32.0 (-> arg1 left data 0 x)))))
           (f26-0 (* 16.0 (+ (the float (+ s3-0 16)) (* 32.0 (-> arg1 left data 0 y)))))
           (f30-0 (* 16.0 (+ (the float (+ s4-0 48)) (* 32.0 (-> arg1 right data 0 x)))))
+          (sv-16 (* 16.0 (+ (the float (+ s3-0 16)) (* 32.0 (-> arg1 right data 0 y)))))
           )
-      (set! sv-16 (* 16.0 (+ (the float (+ s3-0 16)) (* 32.0 (-> arg1 right data 0 y)))))
       (let ((s1-0 (-> arg1 shaders 0)))
         (let ((v1-6 (the-as object (-> arg0 base))))
           (set! (-> (the-as dma-gif-packet v1-6) dma-vif quad) (-> *eye-work* adgif-tmpl dma-vif quad))
