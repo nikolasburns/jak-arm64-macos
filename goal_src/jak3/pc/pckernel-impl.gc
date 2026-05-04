@@ -198,6 +198,7 @@
   (set! (-> obj memcard-vibration?) #t)
   (set! (-> obj memcard-subtitles?) #f)
   (set! (-> obj hinttitles?) #t)
+  (set! (-> obj subtitle-speaker?) 'auto)
   0)
 
 (define-extern reset-speedrunner-mode-hm-secrets! (function pc-settings-jak3 none))
