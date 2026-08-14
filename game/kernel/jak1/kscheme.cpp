@@ -4,6 +4,7 @@
 
 #include "common/common_types.h"
 #include "common/jit_memory.h"
+#include "common/platform/BuildConfig.h"
 #include "common/log/log.h"
 #include "common/symbols.h"
 #include "common/util/Timer.h"
@@ -61,6 +62,24 @@ u64 alloc_from_heap(u32 heapSymbol, u32 type, s32 size, u32 pp) {
   using namespace jak1_symbols;
   ASSERT(size > 0);
 
+  u32 allocation_flags = KMALLOC_MEMSET;
+  const char* allocation_name = "global-object";
+#if defined(__APPLE__) && defined(__aarch64__)
+  // The function type is allocated before its GOAL symbol is initialized, so this check must
+  // happen before the type metadata fast paths below.  Function objects hold JIT-emitted code
+  // (C trampolines, mips2c stubs), so they must come from page-pooled executable memory rather
+  // than sharing a page with ordinary heap data.
+  if (type && type == *(s7 + FIX_SYM_FUNCTION_TYPE)) {
+#if !OG_EXECUTION_MODE_AOT
+    allocation_flags |= KMALLOC_EXECUTABLE;
+    // kmalloc packs several small objects into one executable page when the
+    // allocation is named "function"; without this each trampoline would burn
+    // a whole 16 KiB page AND share it with the next writable allocation.
+    allocation_name = "function";
+#endif
+  }
+#endif
+
   // align to 16 bytes (part one)
   s32 alignedSize = size + 0xf;
 
@@ -78,23 +97,23 @@ u64 alloc_from_heap(u32 heapSymbol, u32 type, s32 size, u32 pp) {
     // it's a kheap, so just kmalloc.
 
     if (!type) {  // no type given, just call it a global-object
-      return kmalloc(*Ptr<Ptr<kheapinfo>>(heapSymbol), size, KMALLOC_MEMSET, "global-object")
+      return kmalloc(*Ptr<Ptr<kheapinfo>>(heapSymbol), size, allocation_flags, allocation_name)
           .offset;
     }
 
     Ptr<Type> typ(type);
     if (!typ->symbol.offset) {  // type doesn't have a symbol, just call it a global-object
-      return kmalloc(*Ptr<Ptr<kheapinfo>>(heapSymbol), size, KMALLOC_MEMSET, "global-object")
+      return kmalloc(*Ptr<Ptr<kheapinfo>>(heapSymbol), size, allocation_flags, allocation_name)
           .offset;
     }
 
     Ptr<String> gstr = info(typ->symbol)->str;
     if (!gstr->len) {  // string has nothing in it.
-      return kmalloc(*Ptr<Ptr<kheapinfo>>(heapSymbol), size, KMALLOC_MEMSET, "global-object")
+      return kmalloc(*Ptr<Ptr<kheapinfo>>(heapSymbol), size, allocation_flags, allocation_name)
           .offset;
     }
 
-    return kmalloc(*Ptr<Ptr<kheapinfo>>(heapSymbol), size, KMALLOC_MEMSET, gstr->data()).offset;
+    return kmalloc(*Ptr<Ptr<kheapinfo>>(heapSymbol), size, allocation_flags, gstr->data()).offset;
   } else if (heapOffset == FIX_SYM_PROCESS_TYPE) {
     if (pp == UNKNOWN_PP) {
       // added
@@ -302,8 +321,6 @@ Ptr<Function> make_function_from_c_systemv(void* func, bool arg3_is_pp) {
     scope.flush_instruction_cache();
     (void)code_size;
   }
-  // See make_nothing_func: keep the surrounding heap page writable for init.
-  jit_memory::make_writable(mem.c(), 0x40);
   return mem.cast<Function>();
 #else
   auto f = (uint64_t)func;
@@ -450,8 +467,6 @@ Ptr<Function> make_stack_arg_function_from_c_systemv(void* func) {
     scope.flush_instruction_cache();
     (void)code_size;
   }
-  // See make_nothing_func: keep the surrounding heap page writable for init.
-  jit_memory::make_writable(mem.c(), 0x40);
   return mem.cast<Function>();
 #else
   auto f = (uint64_t)func;
@@ -575,9 +590,6 @@ Ptr<Function> make_nothing_func() {
     scope.flush_instruction_cache();
     (void)code_size;
   }
-  // The scope re-protects the whole page as executable on destruction, but the
-  // GOAL heap around this trampoline is ordinary data that init still writes.
-  jit_memory::make_writable(mem.c(), 0x14);
 #else
   // a single x86-64 ret.
   mem.c()[0] = 0xc3;
@@ -604,7 +616,6 @@ Ptr<Function> make_zero_func() {
     scope.flush_instruction_cache();
     (void)code_size;
   }
-  jit_memory::make_writable(mem.c(), 0x14);
 #else
   // xor eax, eax
   mem.c()[0] = 0x31;
@@ -868,6 +879,10 @@ Ptr<Type> intern_type_from_c(const char* name, u64 methods) {
     // create the type.
     auto type = alloc_and_init_type(symbol, n_methods);
     type->symbol = symbol;
+#if defined(__APPLE__) && defined(__aarch64__) && !OG_EXECUTION_MODE_AOT
+    // Type objects can share a page with linked, executable code.
+    jit_memory::make_writable(&type->num_methods, sizeof(type->num_methods));
+#endif
     type->num_methods = n_methods;
     return type;
   } else {
@@ -902,6 +917,10 @@ Ptr<Type> set_type_values(Ptr<Type> type, Ptr<Type> parent, u64 flags) {
 
   u16 new_methods = (flags >> 32) & 0xffff;
   if (type->num_methods < new_methods) {
+#if defined(__APPLE__) && defined(__aarch64__) && !OG_EXECUTION_MODE_AOT
+    // Type objects can share a page with linked, executable code.
+    jit_memory::make_writable(&type->num_methods, sizeof(type->num_methods));
+#endif
     type->num_methods = new_methods;
   }
 
@@ -1098,6 +1117,11 @@ u64 method_set(u32 type_, u32 method_id, u32 method) {
         printf("***********************************\n");
       }
 
+#if defined(__APPLE__) && defined(__aarch64__) && !OG_EXECUTION_MODE_AOT
+      // See above: method tables can share a page with linked, executable code.
+      jit_memory::make_writable(&symAsType->get_method(method_id).offset,
+                                sizeof(symAsType->get_method(method_id).offset));
+#endif
       symAsType->get_method(method_id).offset = method;
     }
 
@@ -1139,6 +1163,11 @@ u64 method_set(u32 type_, u32 method_id, u32 method) {
         printf("***********************************\n");
       }
 
+#if defined(__APPLE__) && defined(__aarch64__) && !OG_EXECUTION_MODE_AOT
+      // See above: method tables can share a page with linked, executable code.
+      jit_memory::make_writable(&symAsType->get_method(method_id).offset,
+                                sizeof(symAsType->get_method(method_id).offset));
+#endif
       symAsType->get_method(method_id).offset = method;
     }
   }
