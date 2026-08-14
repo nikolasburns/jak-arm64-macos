@@ -2118,8 +2118,13 @@
        ;; go straight to dead.
        (set! (-> this status) 'dead)
        ;; and return (with no deactivate)
-       ;; TODO: replace with abandon.
-       (let ((temp (the uint return-from-thread))) (rlet ((off :reg r15 :type uint)) (+! temp off) (.push temp) (.ret))))
+       ;; NOTE: this MUST go through abandon-thread. The raw (.push temp) (.ret)
+       ;; form that used to be inlined here is x86-only: ARM64's `ret` branches
+       ;; to X30 and ignores the pushed address, so it returned to deactivate's
+       ;; own caller -- the child/brother walk -- which then recursed forever,
+       ;; leaking one 16-byte push per trip until the descent ran off the bottom
+       ;; of the 8 MB dram stack and overwrote the symbol name strings below it.
+       (abandon-thread))
       ;; second case - we deactivated while initializing.
       ((eq? (-> this status) 'initialize)
        (set! (-> this status) 'dead)
