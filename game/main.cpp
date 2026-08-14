@@ -107,7 +107,7 @@ int main(int argc, char** argv) {
   std::vector<std::string> game_args;
   CLI::App app{"OpenGOAL Game Runtime"};
   app.add_flag("--version", show_version, "Display the built revision");
-  app.add_option("-g,--game", game_name, "The game name: 'jak2' only");
+  app.add_option("-g,--game", game_name, "The game name: 'jak1' or 'jak2'");
   app.add_flag("-v,--verbose", verbose_logging, "Enable verbose logging on stdout");
   app.add_option(
       "--port", port_number,
@@ -138,8 +138,8 @@ int main(int argc, char** argv) {
   app.allow_extras();
   CLI11_PARSE(app, argc, argv);
 
-  if (game_name != "jak2") {
-    lg::error("Only Jak 2 is supported by this checkout");
+  if (game_name != "jak1" && game_name != "jak2") {
+    lg::error("Only Jak 1 and Jak 2 are supported by this checkout");
     return 1;
   }
 

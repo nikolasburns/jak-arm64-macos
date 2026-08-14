@@ -13,6 +13,14 @@ add_library(compiler
         build_level/common/build_level.cpp
         build_actor/common/animation_processing.cpp
         build_actor/common/MercExtract.cpp
+        build_level/jak1/build_level.cpp
+        build_level/jak1/ambient.cpp
+        build_level/jak1/Entity.cpp
+        build_level/jak1/FileInfo.cpp
+        build_level/jak1/LevelFile.cpp
+        build_level/collide/jak1/collide_bvh.cpp
+        build_level/collide/jak1/collide_drawable.cpp
+        build_level/collide/jak1/collide_pack.cpp
         build_level/jak2/build_level.cpp
         build_level/collide/jak2/collide.cpp
         build_level/common/color_quantization.cpp
@@ -54,6 +62,7 @@ add_library(compiler
         data_compiler/game_count.cpp
         data_compiler/DataObjectGenerator.cpp
         build_actor/common/build_actor.cpp
+        build_actor/jak1/build_actor.cpp
         build_actor/jak2/build_actor.cpp
         debugger/Debugger.cpp
         debugger/DebugInfo.cpp

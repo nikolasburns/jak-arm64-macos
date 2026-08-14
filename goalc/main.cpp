@@ -55,7 +55,7 @@ int main(int argc, char** argv) {
                  "VS Code extension) connect to. Defaults to 8129 for Jak 2");
   app.add_flag("--user-auto", auto_find_user,
                "Attempt to automatically deduce the user, overrides '--user'");
-  app.add_option("-g,--game", game, "The game name: 'jak2' only");
+  app.add_option("-g,--game", game, "The game name: 'jak1' or 'jak2'");
   app.add_option("--target-arch", target_arch,
                  "The target architecture for compiled GOAL code: 'x86_64' (default) or 'arm64'");
   app.add_option("--proj-path", project_path_override,
@@ -65,8 +65,8 @@ int main(int argc, char** argv) {
   app.validate_positionals();
   CLI11_PARSE(app, argc, argv);
 
-  if (game != "jak2") {
-    lg::error("Only Jak 2 is supported by this checkout");
+  if (game != "jak1" && game != "jak2") {
+    lg::error("Only Jak 1 and Jak 2 are supported by this checkout");
     return 1;
   }
 

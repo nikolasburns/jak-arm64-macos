@@ -71,8 +71,12 @@ GameTextFontBank* get_font_bank(GameTextVersion version) {
 }
 
 GameTextFontBank* get_font_bank_from_game_version(GameVersion version) {
+  if (version == GameVersion::Jak1) {
+    // Jak 1 has been patched to use V2
+    return get_font_bank(GameTextVersion::JAK1_V2);
+  }
   ASSERT_MSG(version == GameVersion::Jak2,
-             "This snapshot only provides the Jak 2 font bank");
+             "This snapshot only provides the Jak 1 and Jak 2 font banks");
   return get_font_bank(GameTextVersion::JAK2);
 }
 

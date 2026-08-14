@@ -41,8 +41,8 @@ int main(int argc, char** argv) {
   app.validate_positionals();
   CLI11_PARSE(app, argc, argv);
 
-  if (game != "jak2") {
-    lg::error("Only Jak 2 is supported by this checkout");
+  if (game != "jak1" && game != "jak2") {
+    lg::error("Only Jak 1 and Jak 2 are supported by this checkout");
     return 1;
   }
 

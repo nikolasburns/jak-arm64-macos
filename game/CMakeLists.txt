@@ -22,6 +22,7 @@ else()
 endif()
 
 set(RUNTIME_SOURCE
+        external/discord_jak1.cpp
         external/discord_jak2.cpp
         external/discord.cpp
         graphics/display.cpp
@@ -84,6 +85,7 @@ set(RUNTIME_SOURCE
         graphics/opengl_renderer/Warp.cpp
         graphics/pipelines/opengl.cpp
         graphics/sceGraphicsInterface.cpp
+        graphics/texture/jak1_tpage_dir.cpp
         graphics/texture/jak2_tpage_dir.cpp
         graphics/texture/TextureConverter.cpp
         graphics/texture/TexturePool.cpp
@@ -101,6 +103,15 @@ set(RUNTIME_SOURCE
         kernel/common/kscheme.cpp
         kernel/common/ksocket.cpp
         kernel/common/ksound.cpp
+        kernel/jak1/fileio.cpp
+        kernel/jak1/kboot.cpp
+        kernel/jak1/kdgo.cpp
+        kernel/jak1/klink.cpp
+        kernel/jak1/klisten.cpp
+        kernel/jak1/kmachine.cpp
+        kernel/jak1/kprint.cpp
+        kernel/jak1/kscheme.cpp
+        kernel/jak1/ksound.cpp
         kernel/jak2/fileio.cpp
         kernel/jak2/kboot.cpp
         kernel/jak2/kdgo.cpp
@@ -112,6 +123,31 @@ set(RUNTIME_SOURCE
         kernel/jak2/kprint.cpp
         kernel/jak2/kscheme.cpp
         kernel/jak2/ksound.cpp
+        mips2c/jak1_functions/bones.cpp
+        mips2c/jak1_functions/collide_cache.cpp
+        mips2c/jak1_functions/collide_edge_grab.cpp
+        mips2c/jak1_functions/collide_func.cpp
+        mips2c/jak1_functions/collide_mesh.cpp
+        mips2c/jak1_functions/collide_probe.cpp
+        mips2c/jak1_functions/draw_string.cpp
+        mips2c/jak1_functions/generic_effect.cpp
+        mips2c/jak1_functions/generic_effect2.cpp
+        mips2c/jak1_functions/generic_merc.cpp
+        mips2c/jak1_functions/generic_tie.cpp
+        mips2c/jak1_functions/joint.cpp
+        mips2c/jak1_functions/merc_blend_shape.cpp
+        mips2c/jak1_functions/ocean_vu0.cpp
+        mips2c/jak1_functions/ocean.cpp
+        mips2c/jak1_functions/ripple.cpp
+        mips2c/jak1_functions/shadow.cpp
+        mips2c/jak1_functions/sky_tng.cpp
+        mips2c/jak1_functions/sparticle_launcher.cpp
+        mips2c/jak1_functions/sparticle.cpp
+        mips2c/jak1_functions/test_func.cpp
+        mips2c/jak1_functions/texture.cpp
+        mips2c/jak1_functions/tfrag.cpp
+        mips2c/jak1_functions/tie_methods.cpp
+        mips2c/jak1_functions/time_of_day.cpp
         mips2c/jak2_functions/bones.cpp
         mips2c/jak2_functions/collide_cache.cpp
         mips2c/jak2_functions/collide_edge_grab.cpp
@@ -151,6 +187,17 @@ set(RUNTIME_SOURCE
         overlord/common/soundcommon.cpp
         overlord/common/srpc.cpp
         overlord/common/ssound.cpp
+        overlord/jak1/dma.cpp
+        overlord/jak1/fake_iso.cpp
+        overlord/jak1/iso_api.cpp
+        overlord/jak1/iso_queue.cpp
+        overlord/jak1/iso.cpp
+        overlord/jak1/isocommon.cpp
+        overlord/jak1/overlord.cpp
+        overlord/jak1/ramdisk.cpp
+        overlord/jak1/srpc.cpp
+        overlord/jak1/ssound.cpp
+        overlord/jak1/stream.cpp
         overlord/jak2/dma.cpp
         overlord/jak2/iso_api.cpp
         overlord/jak2/iso_cd.cpp

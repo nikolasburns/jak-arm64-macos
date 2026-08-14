@@ -4,6 +4,8 @@
 
 #include "common/common_types.h"
 
+#include "game/graphics/texture/jak1_tpage_dir.h"  // EXTRA_PC_PORT_TEXTURE_COUNT
+
 // clang-format off
 namespace {
 std::vector<u32> tpage_dir = {

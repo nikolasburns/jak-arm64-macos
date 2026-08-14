@@ -169,13 +169,27 @@ std::string get_current_executable_path() {
 }
 
 std::optional<std::string> try_get_project_path_from_path(const std::string& path) {
-  std::string::size_type pos =
-      std::string(path).rfind("jak-project");  // Strip file path down to /jak-project/ directory
-  if (pos == std::string::npos) {
-    return {};
+  // Search upward for a marker file (CMakeLists.txt) to find project root
+  fs::path current_path(path);
+
+  // Start from the executable's directory
+  if (fs::is_regular_file(current_path)) {
+    current_path = current_path.parent_path();
   }
-  return std::string(path).substr(
-      0, pos + 11);  // + 12 to include "/jak-project" in the returned filepath
+
+  // Walk up the directory tree looking for CMakeLists.txt
+  while (current_path.has_parent_path() && current_path != current_path.parent_path()) {
+    fs::path marker = current_path / "CMakeLists.txt";
+    if (fs::exists(marker)) {
+      // Verify it's actually the project root by checking for goalc directory
+      if (fs::exists(current_path / "goalc") && fs::is_directory(current_path / "goalc")) {
+        return current_path.string();
+      }
+    }
+    current_path = current_path.parent_path();
+  }
+
+  return {};
 }
 
 /*!

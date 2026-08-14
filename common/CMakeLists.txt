@@ -87,6 +87,7 @@ add_library(common
         util/dialogs.cpp
         util/diff.cpp
         util/FileUtil.cpp
+        util/font/dbs/font_db_jak1.cpp
         util/font/dbs/font_db_jak2.cpp
         util/font/font_utils_korean.cpp
         util/font/font_utils.cpp

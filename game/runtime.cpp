@@ -43,6 +43,10 @@
 #include "game/kernel/common/kmemcard.h"
 #include "game/kernel/common/kprint.h"
 #include "game/kernel/common/kscheme.h"
+#include "game/kernel/jak1/kboot.h"
+#include "game/kernel/jak1/kdgo.h"
+#include "game/kernel/jak1/klisten.h"
+#include "game/kernel/jak1/kscheme.h"
 #include "game/kernel/jak2/kboot.h"
 #include "game/kernel/jak2/kdgo.h"
 #include "game/kernel/jak2/klisten.h"
@@ -52,6 +56,14 @@
 #include "game/overlord/common/sbank.h"
 #include "game/overlord/common/srpc.h"
 #include "game/overlord/common/ssound.h"
+#include "game/overlord/jak1/dma.h"
+#include "game/overlord/jak1/fake_iso.h"
+#include "game/overlord/jak1/iso.h"
+#include "game/overlord/jak1/iso_queue.h"
+#include "game/overlord/jak1/overlord.h"
+#include "game/overlord/jak1/ramdisk.h"
+#include "game/overlord/jak1/srpc.h"
+#include "game/overlord/jak1/stream.h"
 #include "game/overlord/jak2/dma.h"
 #include "game/overlord/jak2/iso_cd.h"
 #include "game/overlord/jak2/iso_queue.h"
@@ -175,21 +187,25 @@ void ee_runner(SystemThreadInterface& iface) {
   jit_memory::make_no_access((void*)g_ee_main_mem, EE_MAIN_MEM_LOW_PROTECT);
 #endif
   fileio_init_globals();
+  jak1::kboot_init_globals();
   jak2::kboot_init_globals();
 
   kboot_init_globals_common();
   kdgo_init_globals();
+  jak1::kdgo_init_globals();
   jak2::kdgo_init_globals();
 
   kdsnetm_init_globals_common();
   klink_init_globals();
 
   kmachine_init_globals_common();
+  jak1::kscheme_init_globals();
   jak2::kscheme_init_globals();
   kscheme_init_globals_common();
   kmalloc_init_globals_common();
 
   klisten_init_globals();
+  jak1::klisten_init_globals();
   jak2::klisten_init_globals();
 
   jak2::vag_init_globals();
@@ -203,6 +219,9 @@ void ee_runner(SystemThreadInterface& iface) {
   xdbg::allow_debugging();
 
   switch (g_game_version) {
+    case GameVersion::Jak1:
+      jak1::goal_main(g_argc, g_argv);
+      break;
     case GameVersion::Jak2:
       jak2::goal_main(g_argc, g_argv);
       break;
@@ -250,25 +269,32 @@ void iop_runner(SystemThreadInterface& iface, GameVersion version) {
     iop.signal_run_iop();
   });
 
+  jak1::dma_init_globals();
   jak2::dma_init_globals();
 
   iso_init_globals();
+  jak1::iso_init_globals();
   jak2::iso_init_globals();
 
   fake_iso_init_globals();
+  jak1::fake_iso_init_globals();
   jak2::iso_cd_init_globals();
 
+  jak1::iso_queue_init_globals();
   jak2::iso_queue_init_globals();
 
   jak2::spusstreams_init_globals();
+  jak1::ramdisk_init_globals();
   jak2::ramdisk_init_globals();
   sbank_init_globals();
 
   srpc_init_globals();
+  jak1::srpc_init_globals();
   jak2::srpc_init_globals();
   ssound_init_globals();
   jak2::ssound_init_globals();
 
+  jak1::stream_init_globals();
   jak2::stream_init_globals();
 
   prof().end_event();
@@ -294,6 +320,9 @@ void iop_runner(SystemThreadInterface& iface, GameVersion version) {
   {
     auto p = scoped_prof("overlord-start");
     switch (version) {
+      case GameVersion::Jak1:
+        jak1::start_overlord_wrapper(iop.overlord_argc, iop.overlord_argv, &complete);
+        break;
       case GameVersion::Jak2:
         jak2::start_overlord_wrapper(iop.overlord_argc, iop.overlord_argv, &complete);
         break;

@@ -8,6 +8,7 @@
 #include "common/util/Timer.h"
 
 #include "game/graphics/pipelines/opengl.h"
+#include "game/graphics/texture/jak1_tpage_dir.h"
 #include "game/graphics/texture/jak2_tpage_dir.h"
 
 #include "fmt/format.h"
@@ -307,6 +308,8 @@ std::optional<u64> TexturePool::lookup_mt4hh(u32 location) {
 namespace {
 const std::vector<u32>& get_tpage_dir(GameVersion version) {
   switch (version) {
+    case GameVersion::Jak1:
+      return get_jak1_tpage_dir();
     case GameVersion::Jak2:
       return get_jak2_tpage_dir();
     default:

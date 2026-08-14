@@ -14,6 +14,7 @@ int gDiscordRpcEnabled;
 int64_t gStartTime;
 
 static const std::map<GameVersion, std::string> rpc_client_ids = {
+    {GameVersion::Jak1, "938876425585434654"},
     {GameVersion::Jak2, "1060390251694149703"},
 };
 
@@ -35,7 +36,7 @@ void handleDiscordJoinRequest(const DiscordUser* /*request*/) {}
 void handleDiscordSpectate(const char* /*secret*/) {}
 
 void init_discord_rpc() {
-  if (g_game_version != GameVersion::Jak2) {
+  if (g_game_version != GameVersion::Jak1 && g_game_version != GameVersion::Jak2) {
     lg::error("Game version unsupported for Discord RPC - {}", fmt::underlying(g_game_version));
     return;
   }
