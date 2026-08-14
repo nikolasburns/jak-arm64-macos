@@ -588,6 +588,42 @@
 (define *hookguard-alive* #f)
 (define *hookguard-alive2* #f)
 (define *hookguard-listener-count* 0)
+(define *resumeguard-alive* #f)
+
+;; RESUMEGUARD (session 11). Unified hypothesis: a cpu-thread that was never
+;; `set-to-run` is dispatched anyway, so `thread-resume` faithfully restores a
+;; VIRGIN save area -- rreg[0..6] all zero -- and `set-to-run-bootstrap` then
+;; does `br x19` with x19 = 0. That single cause explains BOTH pc=0 and lr=0
+;; (x30 is loaded from a literal that is also 0 in a virgin frame), which is why
+;; the x30 linkage audit came back correct.
+;;
+;; No tag field is needed: a virgin thread is self-identifying. `set-to-run`
+;; always writes BOTH `pc` (= set-to-run-bootstrap) and `rreg 0` (= func), so
+;; `pc = 0` or `rreg 0 = 0` at resume means this thread was never set to run.
+;; Reports and then STILL RESUMES, preserving the crash.
+(defmacro resumeguard (proc thr)
+  `(let ((rg-pc (the int (-> ,thr pc)))
+         (rg-r0 (the int (-> ,thr rreg 0))))
+     (when (not *resumeguard-alive*)
+       (set! *resumeguard-alive* #t)
+       (format 0 "RESUMEGUARD ALIVE: first resume, proc ~A, pc #x~X rreg0 #x~X~%"
+               ,proc rg-pc rg-r0))
+     (when (or (zero? rg-pc) (zero? rg-r0))
+       (format 0 "RESUMEGUARD HIT: resuming a thread that was never set-to-run~%")
+       (format 0 "  process   = ~A~%" ,proc)
+       (format 0 "  type      = ~A~%" (-> ,proc type))
+       (format 0 "  status    = ~A~%" (-> ,proc status))
+       (format 0 "  state     = ~A~%" (-> ,proc state))
+       (format 0 "  thread    = ~A~%" ,thr)
+       (format 0 "  thr pc    = #x~X  (0 => never set-to-run)~%" rg-pc)
+       (format 0 "  rreg0     = #x~X  (0 => the br x19 target)~%" rg-r0)
+       (format 0 "  rreg1..6  = #x~X #x~X #x~X #x~X #x~X #x~X~%"
+               (the int (-> ,thr rreg 1)) (the int (-> ,thr rreg 2))
+               (the int (-> ,thr rreg 3)) (the int (-> ,thr rreg 4))
+               (the int (-> ,thr rreg 5)) (the int (-> ,thr rreg 6)))
+       (format 0 "  thr sp    = #x~X  stack-top = #x~X~%"
+               (the int (-> ,thr sp)) (the int (-> ,thr stack-top)))
+       (hookguard-report (the int (&-> ,thr rreg 0)) rg-pc rg-r0))))
 
 (defmacro hookguard (branch-name proc tested)
   "Re-read the hook slot, compare with the value the cond tested, and report.
@@ -1561,7 +1597,9 @@
                                  ;; we're sleeping. Move us to suspended, in case we were in waiting to run.
                                  (set! (-> this status) 'suspended)
                                  ;; not sleeping. call resume hook. This will return once the main thread suspends again.
-                                 ((-> this main-thread resume-hook) (-> this main-thread)))
+                                 (begin
+                                   (resumeguard this (-> this main-thread))
+                                   ((-> this main-thread resume-hook) (-> this main-thread))))
                                ;; check for deadness
                                (cond
                                  ((eq? (-> this status) 'dead)
