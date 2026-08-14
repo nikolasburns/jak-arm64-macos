@@ -200,6 +200,119 @@ extern "C" __attribute__((noinline)) void symguard_arm_watch(u32 str_offset) {
   asm volatile("" : : "r"(str_offset) : "memory");
 }
 
+// Debugger anchor for watching a *part-group-id-table* entry. Called once, with
+// the table's GOAL offset in the first argument, at a moment the entry is known
+// valid. Set a breakpoint here and arm a hardware watchpoint on
+// base + tbl + 12 + index*4. Does nothing on its own.
+extern "C" __attribute__((noinline)) void partcensus_arm_watch(u32 table_offset) {
+  asm volatile("" : : "r"(table_offset) : "memory");
+}
+
+// PARTCENSUS: census of *part-group-id-table*, to answer "is slot 656 (and which
+// others) empty, and are the empties clustered or scattered?".
+// Set PARTCENSUS=<object name> to dump after that object links (e.g.
+// PARTCENSUS=game-save), or PARTCENSUS=1 to dump after every object that changes
+// the populated count. Prints slot 656 explicitly every time.
+// The table is `(new 'global 'boxed-array sparticle-launch-group 1024)`.
+// array layout (TypeSystem.cpp:1249): length +0, allocated-length +4,
+// content-type +8, data +12. Entries are 4-byte GOAL pointers; empty == s7.
+static void partcensus_check(const char* after_object) {
+  const char* want = getenv("PARTCENSUS");
+  if (!want) {
+    return;
+  }
+  // Resolve the table by SYMBOL, then sanity-check the array header before
+  // trusting it -- per CLAUDE.md, a name lookup that "succeeds" is not enough.
+  auto sym = jak1::find_symbol_from_c("*part-group-id-table*");
+  if (!sym.offset) {
+    lg::error("PARTCENSUS: symbol *part-group-id-table* not found after {}", after_object);
+    return;
+  }
+  u32 tbl = sym->value;
+  if (!tbl) {
+    lg::error("PARTCENSUS: *part-group-id-table* is 0 after {}", after_object);
+    return;
+  }
+  s32 length = *Ptr<s32>(tbl + 0).c();
+  s32 alloc = *Ptr<s32>(tbl + 4).c();
+  if (length <= 0 || length > 4096 || alloc <= 0 || alloc > 4096) {
+    lg::error("PARTCENSUS: bad array header after {} (len={} alloc={}) -- not trusting it",
+              after_object, length, alloc);
+    return;
+  }
+  u32 s7v = s7.offset;
+  u32* data = Ptr<u32>(tbl + 12).c();
+  int populated = 0;
+  for (s32 i = 0; i < length; i++) {
+    if (data[i] != 0 && data[i] != s7v) {
+      populated++;
+    }
+  }
+  static int last_populated = -1;
+  bool named = (strcmp(want, "1") != 0);
+  if (named && strcmp(want, after_object) != 0) {
+    if (populated == last_populated) {
+      return;
+    }
+  }
+  if (!named && populated == last_populated) {
+    return;
+  }
+  last_populated = populated;
+
+  u32 e656 = (656 < length) ? data[656] : 0;
+  lg::warn("PARTCENSUS after {}: populated {}/{} (alloc {}), slot656 = {:#x} [{}]", after_object,
+           populated, length, alloc, e656,
+           (e656 == 0 || e656 == s7v) ? "EMPTY" : "ok");
+
+  // Arm point: once slot 656 is genuinely populated, hand the table offset to the
+  // debugger anchor so a hardware watchpoint can be placed on that entry.
+  // PARTWATCH=1 enables; fires once.
+  static bool armed = false;
+  if (!armed && getenv("PARTWATCH") && e656 != 0 && e656 != s7v) {
+    armed = true;
+    lg::warn("PARTCENSUS: arming watch anchor, table offset {:#x}, entry addr = base+{:#x}", tbl,
+             tbl + 12 + 656 * 4);
+    partcensus_arm_watch(tbl);
+  }
+
+  // Cluster analysis: contiguous runs of EMPTY slots. A single long run means one
+  // object's top-level never completed; scattered singletons mean per-store loss.
+  int runs = 0, longest = 0, longest_at = -1, cur = 0, cur_at = -1;
+  for (s32 i = 0; i < length; i++) {
+    bool empty = (data[i] == 0 || data[i] == s7v);
+    if (empty) {
+      if (cur == 0) {
+        cur_at = i;
+      }
+      cur++;
+    } else {
+      if (cur > 0) {
+        runs++;
+        if (cur > longest) {
+          longest = cur;
+          longest_at = cur_at;
+        }
+      }
+      cur = 0;
+    }
+  }
+  if (cur > 0) {
+    runs++;
+    if (cur > longest) {
+      longest = cur;
+      longest_at = cur_at;
+    }
+  }
+  lg::warn("PARTCENSUS   empty-runs={} longest={} @{}", runs, longest, longest_at);
+  // Neighbours of 656, to see whether the whole neighbourhood is missing.
+  std::string near;
+  for (s32 i = 648; i < 665 && i < length; i++) {
+    near += fmt::format("{}{}", (data[i] == 0 || data[i] == s7v) ? "." : "#", (i == 656) ? "*" : "");
+  }
+  lg::warn("PARTCENSUS   slots 648..664: {} (. = empty, * marks 656)", near);
+}
+
 // SYMGUARD: watch a known symbol's name string for in-place corruption.
 // Set SYMGUARD=1. Prints the object being linked when the bytes first change.
 static void symguard_check(const char* when) {
@@ -677,6 +790,7 @@ void link_control::jak1_finish(bool jump_from_c_to_goal) {
 
   ObjectFileHeader* ofh = m_link_block_ptr.cast<ObjectFileHeader>().c();
   lg::debug("link finish: {}", m_object_name);
+  partcensus_check(m_object_name);
   if (ofh->object_file_version == 3) {
     // todo check function type of entry
 
