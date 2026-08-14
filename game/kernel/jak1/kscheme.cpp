@@ -77,6 +77,15 @@ u64 alloc_from_heap(u32 heapSymbol, u32 type, s32 size, u32 pp) {
     // a whole 16 KiB page AND share it with the next writable allocation.
     allocation_name = "function";
 #endif
+  } else if (type && type == *(s7 + FIX_SYM_TYPE_TYPE)) {
+#if !OG_EXECUTION_MODE_AOT
+    // Type objects carry the method table, which the kernel keeps writing for
+    // the whole run (method_set and its inheritance propagation).  Keep them on
+    // pages that are never made executable so linking an object file cannot
+    // revoke write access to a type sitting next to the linked code.
+    allocation_flags |= KMALLOC_DATA_PAGE;
+    allocation_name = "type";
+#endif
   }
 #endif
 

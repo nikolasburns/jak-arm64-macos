@@ -204,7 +204,9 @@ uint32_t link_control::jak1_work_v3() {
           } else {
             Ptr<u8> src(ofh->code_infos[seg_id].offset);
             ofh->code_infos[seg_id].offset =
-                kmalloc(kdebugheap, ofh->code_infos[seg_id].size, 0, "debug-segment").offset;
+                kmalloc(kdebugheap, ofh->code_infos[seg_id].size, KMALLOC_EXECUTABLE,
+                        "debug-segment")
+                    .offset;
             if (ofh->code_infos[seg_id].offset == 0) {
               MsgErr("dkernel: unable to malloc %d bytes for debug-segment\n",
                      ofh->code_infos[seg_id].size);
@@ -220,7 +222,8 @@ uint32_t link_control::jak1_work_v3() {
         } else {
           Ptr<u8> src(ofh->code_infos[seg_id].offset);
           ofh->code_infos[seg_id].offset =
-              kmalloc(m_heap, ofh->code_infos[seg_id].size, 0, "main-segment").offset;
+              kmalloc(m_heap, ofh->code_infos[seg_id].size, KMALLOC_EXECUTABLE, "main-segment")
+                  .offset;
           if (ofh->code_infos[seg_id].offset == 0) {
             MsgErr("dkernel: unable to malloc %d bytes for main-segment\n",
                    ofh->code_infos[seg_id].size);
@@ -235,7 +238,8 @@ uint32_t link_control::jak1_work_v3() {
         } else {
           Ptr<u8> src(ofh->code_infos[seg_id].offset);
           ofh->code_infos[seg_id].offset =
-              kmalloc(m_heap, ofh->code_infos[seg_id].size, KMALLOC_TOP, "top-level-segment")
+              kmalloc(m_heap, ofh->code_infos[seg_id].size, KMALLOC_TOP | KMALLOC_EXECUTABLE,
+                      "top-level-segment")
                   .offset;
           if (ofh->code_infos[seg_id].offset == 0) {
             MsgErr("dkernel: unable to malloc %d bytes for top-level-segment\n",

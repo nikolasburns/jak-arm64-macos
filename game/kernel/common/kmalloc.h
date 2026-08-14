@@ -25,6 +25,10 @@ constexpr u32 KMALLOC_MEMSET = 0x1000;  //! Flag to clear memory
 // On Apple ARM64, executable GOAL objects reserve whole JIT pages so code pages never share
 // storage with mutable heap data.
 constexpr u32 KMALLOC_EXECUTABLE = 0x4000;
+// On Apple ARM64, long-lived mutable metadata (type objects and their method tables) is placed
+// in pages that are never made executable, so linking an object file cannot revoke write access
+// to a type that happens to sit next to the linked code.
+constexpr u32 KMALLOC_DATA_PAGE = 0x8000;
 constexpr u32 KMALLOC_ALIGN_256 = 0x100;
 constexpr u32 KMALLOC_ALIGN_64 = 0x40;
 constexpr u32 KMALLOC_ALIGN_16 = 0x10;

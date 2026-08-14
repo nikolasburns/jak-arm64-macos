@@ -49,6 +49,41 @@ Arm64FunctionPool* get_arm64_function_pool(u32 heap_offset) {
   }
   return free_pool;
 }
+
+// The mirror image of the function pool.  Type objects and their method tables
+// are long-lived and are written for the entire run (method_set, inheritance
+// propagation, num_methods), but they are allocated from the same bump
+// allocator as linked code.  When a type object lands on a page that
+// link_control::jak1_finish later flips to r-x, every subsequent method write
+// takes a data abort -- the fault this pool exists to prevent.
+//
+// Keeping them in their own pages costs one page per ~64 types (hundreds of
+// types total, so well under 1 MB), rather than the ~30 MB that padding every
+// object's code segments to a page boundary would cost.
+struct Arm64DataPool {
+  u32 heap_offset = 0;
+  u32 next = 0;
+  u32 end = 0;
+};
+
+constexpr size_t ARM64_DATA_POOL_COUNT = 32;
+Arm64DataPool arm64_data_pools[ARM64_DATA_POOL_COUNT];
+
+Arm64DataPool* get_arm64_data_pool(u32 heap_offset) {
+  Arm64DataPool* free_pool = nullptr;
+  for (auto& pool : arm64_data_pools) {
+    if (pool.heap_offset == heap_offset) {
+      return &pool;
+    }
+    if (!pool.heap_offset && !free_pool) {
+      free_pool = &pool;
+    }
+  }
+  if (free_pool) {
+    free_pool->heap_offset = heap_offset;
+  }
+  return free_pool;
+}
 #endif
 
 void kmalloc_init_globals_common() {
@@ -62,6 +97,9 @@ void kmalloc_init_globals_common() {
     x = 0;
 #if defined(__APPLE__) && defined(__aarch64__) && !OG_EXECUTION_MODE_AOT
   for (auto& pool : arm64_function_pools) {
+    pool = {};
+  }
+  for (auto& pool : arm64_data_pools) {
     pool = {};
   }
 #endif
@@ -193,6 +231,45 @@ Ptr<u8> kmalloc(Ptr<kheapinfo> heap, s32 size, u32 flags, char const* name) {
   uint32_t memstart;
 
 #if defined(__APPLE__) && defined(__aarch64__) && !OG_EXECUTION_MODE_AOT
+  // Type objects are written for the whole run but are allocated from the same
+  // bump allocator as linked code.  Park them in pages that are never handed to
+  // make_executable, so linking cannot revoke write access to a neighbouring
+  // type.  Pack them densely; a page holds many types.
+  if ((flags & KMALLOC_DATA_PAGE) && !(flags & KMALLOC_TOP) && requested_size > 0) {
+    const auto data_page_size = static_cast<uint32_t>(jit_memory::page_size());
+    if (static_cast<uint32_t>(requested_size) < data_page_size) {
+      auto* pool = get_arm64_data_pool(heap.offset);
+      if (!pool) {
+        MsgErr("kmalloc: no ARM64 data pool for heap %x\n", heap.offset);
+        return Ptr<u8>(0);
+      }
+
+      const u32 object_size = (static_cast<u32>(requested_size) + 0xf) & ~0xf;
+      // Match the function pool: reserve the basic-offset tag too, so a single
+      // object never straddles a page boundary.
+      const u32 allocation_size = object_size + BASIC_OFFSET;
+      if (!pool->next || pool->next + allocation_size > pool->end) {
+        // Reserve a page-aligned, page-sized block with KMALLOC_EXECUTABLE so it
+        // gets its own pages, but never call make_executable on it.
+        auto page = kmalloc(heap, static_cast<s32>(data_page_size), KMALLOC_EXECUTABLE,
+                            "type-page");
+        if (!page.offset) {
+          return page;
+        }
+        pool->next = page.offset;
+        pool->end = page.offset + data_page_size;
+      }
+
+      memstart = pool->next;
+      pool->next += allocation_size;
+      jit_memory::make_writable(Ptr<u8>(memstart).c(), allocation_size);
+      if (flags & KMALLOC_MEMSET) {
+        std::memset(Ptr<u8>(memstart).c(), 0, allocation_size);
+      }
+      return Ptr<u8>(memstart);
+    }
+  }
+
   // C-backed GOAL functions are tiny executable objects. Keep their pages
   // isolated from mutable heap data, but pack multiple objects into each page
   // instead of charging one 16 KiB page per 0x40-byte trampoline.
