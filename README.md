@@ -4,6 +4,12 @@ Run **Jak and Daxter: The Precursor Legacy** and **Jak II** natively on Apple
 Silicon. No Rosetta, no translation layer — the GOAL compiler emits ARM64
 directly and the runtime executes it.
 
+That claim is audited, not asserted: see
+**[diag/native-audit.md](diag/native-audit.md)** for a nine-check verification
+covering process translation flags, every mapped Mach-O image, live
+disassembly of JIT'd GOAL code in both running games, and the build artifacts —
+each with the command and its actual output.
+
 **Status**
 
 | Game | State |

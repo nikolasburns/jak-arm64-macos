@@ -92,7 +92,9 @@ _new-all-types.gc
 CLAUDE.md
 PROGRESS.md
 # Debug captures from local runs (boot logs, lldb transcripts).
-diag/
+# Exception: diag/native-audit.md is a published verification artifact.
+diag/*
+!diag/native-audit.md
 log/
 # Local scratch
 *.bak
