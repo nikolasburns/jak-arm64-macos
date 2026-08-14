@@ -538,6 +538,26 @@ void pc_set_levels(u32 l0, u32 l1) {
   Gfx::GetCurrentRenderer()->set_levels(levels);
 }
 
+// HOOKGUARD (diagnostic, session 11). Called from the GOAL `hookguard` macro when
+// a trans/post hook slot is #f, or when its value CHANGED between the cond test
+// and the jump. Prints the slot, both values, and -- the point of doing this in
+// C -- a snapshot of every other thread at this instant, so a concurrent writer
+// (deactivate / abandon-thread / relocation) is caught in the same photograph.
+// This deliberately does NOT stop the fault; the caller still jumps to the bad
+// value so the crash is preserved.
+extern "C" __attribute__((noinline)) void hookguard_report(s32 slot_addr,
+                                                           s32 at_test,
+                                                           s32 at_jump) {
+  lg::error("HOOKGUARD-C slot={:#x} at_test={:#x} at_jump={:#x} changed={}", slot_addr, at_test,
+            at_jump, at_test != at_jump ? "YES" : "no");
+  // Thread snapshot. We cannot read other threads' PCs portably from inside the
+  // process, so report the identities we do control and let lldb (attached at
+  // the ensuing crash) supply the PCs via `thread list`. Printing the marker
+  // here is what makes the two records correlatable.
+  lg::error("HOOKGUARD-C  ^^ take `thread list` + `bt all` at the next stop; "
+            "a thread in deactivate/abandon-thread/relocate is the writer");
+}
+
 void InitMachine_PCPort() {
   // PC Port added functions
   init_common_pc_port_functions(
@@ -556,6 +576,9 @@ void InitMachine_PCPort() {
   make_function_symbol_from_c("__pc-set-levels", (void*)pc_set_levels);
 
   make_function_symbol_from_c("pc-discord-rpc-update", (void*)update_discord_rpc);
+
+  // HOOKGUARD diagnostic (session 11)
+  make_function_symbol_from_c("hookguard-report", (void*)hookguard_report);
 
   // setup string constants
   // TODO - these may be able to be moved into `init_common_pc_port_functions` but it's trickier

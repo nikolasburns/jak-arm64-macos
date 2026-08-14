@@ -572,6 +572,50 @@
         (.ret))
       )))
 
+;; HOOKGUARD (diagnostic, session 11).
+;; The trans/post hook slot is read TWICE at each dispatch site: once by the
+;; `cond` test and again as the argument to `reset-and-call`. There is no CSE in
+;; the compiler, so this is two real loads on EVERY target (x86 included) -- the
+;; window between them is not ARM64-specific. This guard proves whether anything
+;; actually changes the slot inside that window, and if not, which branch really
+;; ran.
+;;
+;; It captures BOTH values (tested vs about-to-be-jumped), the owning process,
+;; and the branch identity, and then DELIBERATELY STILL CRASHES by letting the
+;; bad value through -- it must not paper over the fault.
+;; Fires a one-shot "GUARD ALIVE" on the first healthy dispatch so a silent
+;; guard can never be mistaken for a clean run.
+(define *hookguard-alive* #f)
+
+(defmacro hookguard (branch-name proc tested)
+  "Re-read the hook slot, compare with the value the cond tested, and report.
+   Evaluates to the RE-READ value, i.e. exactly what the call will jump to."
+  `(let ((hg-tested ,tested)
+         (hg-now (-> ,proc ,branch-name)))
+     (when (not *hookguard-alive*)
+       (set! *hookguard-alive* #t)
+       (format 0 "HOOKGUARD ALIVE: first ~A dispatch, proc ~A, value #x~X~%"
+               ',branch-name ,proc (the int hg-now)))
+     (when (or (not hg-now) (!= (the int hg-now) (the int hg-tested)))
+       (format 0 "HOOKGUARD HIT branch=~A~%" ',branch-name)
+       (format 0 "  process   = ~A~%" ,proc)
+       (format 0 "  type      = ~A~%" (-> ,proc type))
+       (format 0 "  status    = ~A~%" (-> ,proc status))
+       (format 0 "  state     = ~A~%" (-> ,proc state))
+       (format 0 "  slot addr = #x~X~%" (&-> ,proc ,branch-name))
+       (format 0 "  AT TEST   = #x~X~%" (the int hg-tested))
+       (format 0 "  AT JUMP   = #x~X~%" (the int hg-now))
+       (format 0 "  (equal? ~A)  -- differ => a writer got in between~%"
+               (= (the int hg-tested) (the int hg-now)))
+       ;; hand the C side the slot address so it can snapshot every other
+       ;; thread's pc at this instant and name the writer.
+       (hookguard-report (the int (&-> ,proc ,branch-name))
+                         (the int hg-tested)
+                         (the int hg-now)))
+     hg-now))
+
+(define-extern hookguard-report (function int int int none))
+
 (defun reset-and-call ((this thread) (func function))
   "Make the given thread the top thread, reset the stack, and call the function.
   Sets up a return trampoline so when the function returns it will return to the
@@ -1492,7 +1536,7 @@
                                   ;; it is safe to do this because the main-thread is currently suspended or hasn't run yet.
                                   (let ((trans (new 'process 'cpu-thread this 'trans PROCESS_STACK_SAVE_SIZE (-> this main-thread stack-top))))
                                     ;; call the function in the thread.
-                                    (reset-and-call trans (-> this trans-hook))
+                                    (reset-and-call trans (hookguard trans-hook this (-> this trans-hook)))
                                     (#when KERNEL_DEBUG
                                       (when (!= (-> trans type) cpu-thread)
                                         (format 0 "corrupted stack after trans for ~A~%" this)))
@@ -1525,7 +1569,7 @@
                                      ;; Note: use dram stack always. This will allow actors to use the scratchpad stack and get a speedup for trans/code
                                      ;; but still be able to do joint-animation stuff that uses the scratchpad in post.
                                      (let ((post (new 'process 'cpu-thread this 'post PROCESS_STACK_SAVE_SIZE *kernel-dram-stack*)))
-                                       (reset-and-call post (-> this post-hook))
+                                       (reset-and-call post (hookguard post-hook this (-> this post-hook)))
                                        (delete post)
                                        (when (eq? (-> this status) 'dead)
                                          ;; oops we died.
