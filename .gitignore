@@ -91,6 +91,9 @@ _new-all-types.gc
 # distillations live in PORTING-NOTES.md and CASE-STUDIES.md, which ARE tracked.
 CLAUDE.md
 PROGRESS.md
+# ...and the separate git-dir that versions them locally (see the progress
+# protocol in CLAUDE.md). Never a submodule; never pushed.
+.worklog-git/
 # Debug captures from local runs (boot logs, lldb transcripts).
 # Exception: diag/native-audit.md is a published verification artifact.
 diag/*
