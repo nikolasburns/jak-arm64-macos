@@ -79,6 +79,14 @@ ObjectFileData ObjectGenerator::generate_data_v3(const TypeSystem* ts) {
       }
 
       function.debug->length = m_data_by_seg.at(seg).size() - function.debug->offset_in_seg;
+
+      // TEMP DIAGNOSTIC: dump the per-function offset map so a runtime fault
+      // address can be mapped back to a function name statically.
+      if (getenv("GOALC_DUMP_FUNC_OFFSETS")) {
+        fprintf(stderr, "FUNCOFF %s seg=%d off=0x%x len=0x%x name=%s\n",
+                function.debug->obj_name.c_str(), seg, function.debug->offset_in_seg,
+                function.debug->length, function.debug->name.c_str());
+      }
     }
   }
 

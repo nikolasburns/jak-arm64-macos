@@ -231,6 +231,12 @@ uint32_t link_control::jak1_work_v3() {
           }
           jak1::ultimate_memcpy(Ptr<u8>(ofh->code_infos[seg_id].offset).c(), src.c(),
                                 ofh->code_infos[seg_id].size);
+          // TEMP DIAGNOSTIC: map runtime fault addresses back to per-function
+          // compile-time offsets (see GOALC_DUMP_FUNC_OFFSETS).
+          if (getenv("GK_DUMP_SEGMENTS")) {
+            fprintf(stderr, "SEGMAP %s seg=%d base=0x%x size=0x%x\n", m_object_name, seg_id,
+                    ofh->code_infos[seg_id].offset, ofh->code_infos[seg_id].size);
+          }
         }
       } else if (seg_id == TOP_LEVEL_SEGMENT) {
         if (ofh->code_infos[seg_id].size == 0) {
