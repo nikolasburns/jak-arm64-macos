@@ -4,9 +4,9 @@
 // --------------------
 // Two shipped bugs in this port shared one shape: GOAL asm-func code hands a
 // continuation ("when you're done, go HERE") to a jump target using the x86
-// idiom "push the return address, then jump/return". That is correct on x86,
-// where `ret` pops the pushed address. It is silently wrong on ARM64, where
-// `ret` and `br` use x30 and ignore the stack entirely.
+// idiom "push the return address, then jump/return". Correct on x86, where
+// `ret` pops the pushed address. Silently wrong on ARM64, where `ret` and `br`
+// use x30 and ignore the stack entirely.
 //
 //   1. session 10 -- `(method deactivate process)` and `enter-state` used a raw
 //      `(.push temp) (.ret)`. ARM64 `ret` branched to a stale x30, returning to
@@ -16,94 +16,204 @@
 //      IR_AsmPush::do_codegen_arm64 and never became `mov x30, x8`. x30 was
 //      therefore never loaded before `(.jr func)`.
 //
-// Both were invisible to the existing ARM64 suites, which check instruction
-// ENCODINGS rather than the handoff contract. These sentinels check the
-// contract itself:
+// The compiler's whole defence against this class is ONE codegen decision:
 //
-//   CONTRACT: the ARM64 lowering of "push the continuation" must place that
-//   value in x30, so a later `ret` transfers control to it; `br` must not
-//   disturb x30.
+//   IR_AsmPush::do_codegen_arm64 (goalc/compiler/IR.cpp) emits
+//     `mov x30, x8`            when the push source is X8 (historical rax role)
+//     `str reg,[sp,#-0x10]!`   otherwise.
 //
-// HOW THESE TESTS AVOID HANGING
-// -----------------------------
-// The emitted code deliberately overwrites x30, which destroys the test
-// harness's OWN return address. An earlier draft did that and spun at 100% CPU
-// forever (the continuation `ret`urned to itself). Every test here therefore:
-//   * saves the harness return address (x30) into a callee-saved register
-//     before installing the continuation, and
-//   * has the continuation restore it before returning.
-// Because the mutation-facing half of this file executes deliberately BROKEN
-// handoffs, a stuck test must fail loudly rather than spin -- run this filter under a
-// hard timeout (see PROGRESS.md session 11 for the diagnosis of the spin).
+// WHAT THESE TESTS ASSERT, AND WHY AT THIS LAYER
+// ----------------------------------------------
+// They drive IR_AsmPush directly and assert on the EMITTED BYTES. An earlier
+// draft executed hand-written `mov x30, x8` sequences instead; that verified
+// ARM64 hardware semantics (never in doubt) rather than the compiler's
+// decision, and a mutation disabling the src_reg==X8 branch left it PASSING.
+// Asserting on emitted bytes is what the mutation can actually kill. It also
+// needs no execution, so it cannot hang.
 //
-// MUTATION-VERIFIED: see PROGRESS.md session 11.
+// (Historical irony worth keeping: the return-linkage test hung on a
+// return-linkage bug. Installing a continuation into x30 destroyed the test
+// harness's own return address, and the continuation returned to itself.)
+//
+// MUTATION-VERIFIED: with `src_reg == X8` disabled in IR_AsmPush, both
+// PushFromRaxRoleInstallsX30 and the X8 row of PushIdiomLoweringTable FAIL.
+// Recorded in PROGRESS.md session 11.
 
+#include <cstring>
+#include <memory>
+#include <vector>
+
+#include "common/type_system/TypeSystem.h"
+
+#include "goalc/compiler/IR.h"
+#include "goalc/debugger/DebugInfo.h"
 #include "goalc/emitter/CodeTester.h"
 #include "goalc/emitter/IGen.h"
 #include "goalc/emitter/IGenARM64.h"
+#include "goalc/emitter/ObjectGenerator.h"
 #include "gtest/gtest.h"
 
 using namespace emitter;
 
 namespace {
-constexpr u64 kSentinel = 0x5AFEC0DE5AFEC0DEull;
-constexpr u64 kCalleeMark = 0x1111ull;
+
+// Same harness shape as test_arm64_ir_asm_basic.cpp: build one function, pin a
+// virtual register to a chosen hardware register, run a single IR node's ARM64
+// codegen, and read back the bytes it produced.
+struct PushHarness {
+  ObjectGenerator gen{GameVersion::Jak1, InstructionSet::ARM64};
+  TypeSystem ts;
+  FunctionDebugInfo dbg;
+  FunctionRecord func;
+  AllocationResult allocs;
+
+  PushHarness() {
+    ts.add_builtin_types(GameVersion::Jak1);
+    dbg.name = "continuation-handoff-test";
+    func = gen.add_function_to_seg(0, &dbg);
+  }
+
+  void assign(int id, Register reg, int n_ir) {
+    std::vector<bool> live(n_ir, true);
+    std::vector<Assignment> ass(n_ir);
+    for (auto& a : ass) {
+      a.kind = Assignment::Kind::REGISTER;
+      a.reg = reg;
+    }
+    if (allocs.ass_as_ranges.size() <= size_t(id)) {
+      std::vector<bool> dummy_live(1, true);
+      std::vector<Assignment> dummy_ass(1);
+      allocs.ass_as_ranges.resize(id + 1, AssignmentRange(0, dummy_live, dummy_ass));
+    }
+    allocs.ass_as_ranges[id] = AssignmentRange(0, live, ass);
+  }
+
+  std::vector<u8> generate() { return gen.generate_data_v3(&ts).segment_data.at(0); }
+};
+
+std::unique_ptr<RegVal> make_reg(int id, const TypeSpec& ts) {
+  IRegister ireg;
+  ireg.id = id;
+  ireg.reg_class = RegClass::GPR_64;
+  return std::make_unique<RegVal>(ireg, ts);
+}
+
+// Emit exactly one IR_AsmPush whose source is pinned to `src`, and return the
+// 4-byte instruction word it produced.
+u32 push_word_for(Register src) {
+  PushHarness h;
+  auto reg = make_reg(0, TypeSpec("int"));
+  h.assign(0, src, 1);
+  IR_Record ir = h.gen.add_ir(h.func);
+  IR_AsmPush push(true, reg.get());
+  push.do_codegen_arm64(&h.gen, h.allocs, ir);
+  auto data = h.generate();
+  // generate_data_v3 prefixes the segment with a 4-byte header word.
+  EXPECT_GE(data.size(), 8u);
+  u32 word = 0;
+  std::memcpy(&word, data.data() + 4, sizeof(word));
+  return word;
+}
+
+// `mov x30, x8` is ORR X30, XZR, X8 == 0xAA0803FE.
+constexpr u32 kMovX30X8 = 0xAA0803FE;
+
+// `str <Xt>, [sp, #-0x10]!` (pre-index, imm9 = -16), Rn = SP = 31.
+// Instructions differ only in Rt, bits [4:0].
+constexpr u32 kStrPreIndexBase = 0xF81F0FE0;
+u32 str_pre_index_for(Register reg) {
+  return kStrPreIndexBase | (u32(reg.id()) & 0x1F);
+}
+
 }  // namespace
 
+// THE test for the session-11 defect. A push whose source is the rax/X8 role
+// MUST become `mov x30, x8` and MUST NOT emit a stack push. Disabling the
+// src_reg==X8 branch in IR_AsmPush::do_codegen_arm64 turns this red.
+TEST(Arm64ContinuationHandoff, PushFromRaxRoleInstallsX30) {
+  const u32 word = push_word_for(X8);
+  EXPECT_EQ(kMovX30X8, word)
+      << "IR_AsmPush with an X8 source did not emit `mov x30, x8` (got 0x"
+      << std::hex << word
+      << "). The ARM64 continuation handoff is broken: a `.push rax` before "
+         "`.ret`/`.jr` will not install the return address, which is the "
+         "session-11 enter-state bug.";
+  EXPECT_NE(str_pre_index_for(X8), word)
+      << "IR_AsmPush with an X8 source emitted a real stack push; on ARM64 the "
+         "pushed value is ignored by `ret`/`br`.";
+}
+
+// The complement: a push from any NON-rax register must stay a real stack push
+// and must NOT install x30. This is what made the session-11 bug possible (an
+// unconstrained `temp` landed in x4), so it is pinned as intended behaviour
+// rather than left implicit.
+TEST(Arm64ContinuationHandoff, PushFromOtherRegisterStaysAStackPush) {
+  for (Register src : {X4, X9, X19}) {
+    const u32 word = push_word_for(src);
+    EXPECT_EQ(str_pre_index_for(src), word)
+        << "IR_AsmPush from x" << src.id() << " should emit `str x" << src.id()
+        << ", [sp, #-0x10]!` (got 0x" << std::hex << word << ")";
+    EXPECT_NE(kMovX30X8, word)
+        << "IR_AsmPush from x" << src.id()
+        << " unexpectedly installed x30; only the rax/X8 role may do that.";
+  }
+}
+
+// Class-level tripwire: walk the x86-push-idiom input shapes the kernel uses and
+// pin the ARM64 output for each. Covers the OTHER members of the bug class
+// alongside enter-state -- `abandon-thread`'s `.push temp` (session 10),
+// `set-to-run-bootstrap`'s trampoline install, and the `(method new
+// catch-frame)` / `throw-dispatch` address rewrites, all of which are `.push`
+// from the rax role in goal_src and MUST lower to the x30 form.
+// Costs microseconds; no execution.
+TEST(Arm64ContinuationHandoff, PushIdiomLoweringTable) {
+  struct Row {
+    Register src;
+    bool expect_x30_install;
+    const char* goal_site;
+  };
+  const Row rows[] = {
+      {X8, true,
+       "(.push temp) where temp is :reg rax -- abandon-thread, reset-and-call, "
+       "set-to-run-bootstrap, enter-state (fixed), new catch-frame, "
+       "throw-dispatch"},
+      {X4, false,
+       "(.push temp) with an UNCONSTRAINED temp -- the session-11 enter-state "
+       "defect; must stay a plain stack push"},
+      {X9, false, "(.push <scratch>) -- ordinary stack traffic"},
+      {X19, false, "(.push <callee-saved>) -- ordinary stack traffic"},
+  };
+
+  for (const auto& row : rows) {
+    const u32 word = push_word_for(row.src);
+    if (row.expect_x30_install) {
+      EXPECT_EQ(kMovX30X8, word) << "expected the x30 install for: " << row.goal_site;
+    } else {
+      EXPECT_EQ(str_pre_index_for(row.src), word)
+          << "expected a real stack push for: " << row.goal_site;
+      EXPECT_NE(kMovX30X8, word) << "unexpected x30 install for: " << row.goal_site;
+    }
+  }
+}
+
 #if defined(__aarch64__)
-
-
-// POSITIVE: a value handed off the way IR_AsmPush::do_codegen_arm64 lowers
-// `.push rax` (i.e. `mov x30, x8`) must actually land in x30. This is the
-// contract enter-state / reset-and-call / set-to-run-bootstrap all depend on.
+// ARM64 HARDWARE SEMANTICS -- NOT compiler coverage.
 //
-// We assert on x30's CONTENTS rather than by jumping to a continuation address:
-// the value is what the whole mechanism turns on, and reading it back keeps the
-// test from having to manufacture a code address (which is what made an earlier
-// draft spin forever). Naming stays CalleeReturnsOntoContinuation because that
-// is the behaviour this content guarantees.
-TEST(Arm64ContinuationHandoff, CalleeReturnsOntoContinuation) {
+// Documents the platform property that makes the x86 push/ret idiom unsafe:
+// `ret` transfers to x30, so installing a value there redirects the return.
+// Deliberately labelled -- a mutation of our emitter does NOT and SHOULD NOT
+// affect it. Do not mistake a green result here for evidence that the lowering
+// works; that is what PushFromRaxRoleInstallsX30 is for.
+TEST(Arm64HardwareSemantics, RetTransfersToX30NotTheStack) {
   CodeTester t(InstructionSet::ARM64);
-  t.init_code_buffer(1024);
-
-  // Prologue: preserve the harness's return address.
+  t.init_code_buffer(256);
+  // Preserve the harness return address, install arg0 in x30, read it back,
+  // then restore. (Failing to preserve it is what made an earlier draft spin.)
   t.emit(IGen::mov_gpr64_gpr64(t.generator(), X19, X30));
-
-  t.emit(IGen::mov_gpr64_gpr64(t.generator(), X8, X0));   // x8 = sentinel value
-  t.emit(IGen::mov_gpr64_gpr64(t.generator(), X30, X8));  // install it in x30
-  t.emit(IGen::mov_gpr64_gpr64(t.generator(), X0, X30));  // read x30 back
-  t.emit(IGen::mov_gpr64_gpr64(t.generator(), X30, X19));  // restore harness LR
+  t.emit(IGen::mov_gpr64_gpr64(t.generator(), X30, X0));
+  t.emit(IGen::mov_gpr64_gpr64(t.generator(), X0, X30));
+  t.emit(IGen::mov_gpr64_gpr64(t.generator(), X30, X19));
   t.emit_return();
-
-  // The value installed via the `.push rax` lowering must be readable in x30.
-  EXPECT_EQ(kSentinel, t.execute(kSentinel, 0, 0, 0))
-      << "the `.push rax` -> `mov x30, x8` lowering did not place the "
-         "continuation in x30";
+  EXPECT_EQ(0x5AFEC0DE5AFEC0DEull, t.execute(0x5AFEC0DE5AFEC0DEull, 0, 0, 0));
 }
-
-// Regression sentinel for the SPECIFIC session-11 defect: a `.push` from a
-// NON-rax register emits a real stack push and must NOT reach x30. This is the
-// buggy emission, asserted to stay buggy-shaped -- if a stack push ever starts
-// installing x30, ARM64 semantics changed and this whole file needs revisiting.
-TEST(Arm64ContinuationHandoff, StackPushDoesNotInstallContinuation) {
-  CodeTester t(InstructionSet::ARM64);
-  t.init_code_buffer(1024);
-
-  t.emit(IGen::mov_gpr64_gpr64(t.generator(), X19, X30));  // save harness LR
-  t.emit(IGen::mov_gpr64_u64(t.generator(), X30, kCalleeMark));  // known marker
-  t.emit(IGen::mov_gpr64_gpr64(t.generator(), X9, X0));    // x9 = would-be cont.
-  // The BUGGY form -- exactly what `.push <non-rax>` emits:
-  t.emit(IGen::push_gpr64(t.generator(), X9));
-  t.emit(IGen::pop_gpr64(t.generator(), X9));  // balance the stack
-  t.emit(IGen::mov_gpr64_gpr64(t.generator(), X0, X30));   // observe x30
-  t.emit(IGen::mov_gpr64_gpr64(t.generator(), X30, X19));  // restore harness LR
-  t.emit_return();
-
-  // x30 must still hold the marker: the stack push did NOT install anything.
-  EXPECT_EQ(kCalleeMark, t.execute(kSentinel, 0, 0, 0))
-      << "a stack push unexpectedly modified x30; ARM64 return semantics may "
-         "have changed and the session-11 diagnosis needs revisiting";
-}
-
-
 #endif  // __aarch64__
