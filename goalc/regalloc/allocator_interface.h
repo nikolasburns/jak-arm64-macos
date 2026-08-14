@@ -52,7 +52,7 @@ struct RegAllocInstr {
   std::vector<int> jumps;                  // RegAllocInstr indexes of possible jumps
   bool fallthrough = true;                 // can it fall through to the next instruction
   bool is_move = false;                    // is this a move?
-  std::string print() const;
+  std::string print(emitter::InstructionSet instr_set = emitter::InstructionSet::X86) const;
 
   /*!
    * Does this read IReg id?
@@ -134,7 +134,7 @@ struct StackOp {
 
   std::vector<Op> ops;
 
-  std::string print() const;
+  std::string print(emitter::InstructionSet instr_set = emitter::InstructionSet::X86) const;
 };
 
 /*!
@@ -147,7 +147,12 @@ struct Assignment {
   emitter::Register reg = -1;  //! where the IRegister is now
   bool spilled = false;        //! are we ever spilled
 
-  std::string to_string() const;
+  // ARM64 GPRs and SIMD registers share one numeric id space, so a register id
+  // is meaningless without knowing the target.  Resolving through the default
+  // (x86) table makes ARM64 ids 16-31 print as "xmm0-15", which has already
+  // caused one misdiagnosis -- always pass the real instruction set when it is
+  // available.
+  std::string to_string(emitter::InstructionSet instr_set = emitter::InstructionSet::X86) const;
 
   bool occupies_same_reg(const Assignment& other) const { return other.reg == reg && (reg != -1); }
 

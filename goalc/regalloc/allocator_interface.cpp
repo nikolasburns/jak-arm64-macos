@@ -20,11 +20,11 @@ void print_allocate_input(const AllocationInput& in) {
       //      lg::print(" [{}] {} -> {}\n", in.debug_instruction_names.at(i),
       //                 in.instructions.at(i).print());
       lg::print(" [{:3d}] {:30} -> {:30}\n", i, in.debug_instruction_names.at(i),
-                in.instructions.at(i).print());
+                in.instructions.at(i).print(in.instr_set));
     }
   } else {
     for (const auto& instruction : in.instructions) {
-      lg::print(" {}\n", instruction.print());
+      lg::print(" {}\n", instruction.print(in.instr_set));
     }
   }
   lg::print("[RegAlloc] Debug Input Constraints:\n");
@@ -49,7 +49,8 @@ void print_result(const AllocationInput& in, const AllocationResult& result) {
 
     for (int j = 0; j < in.max_vars; j++) {
       if (result.ass_as_ranges.at(j).is_live_at_instr(i)) {
-        lives += std::to_string(j) + " " + result.ass_as_ranges.at(j).get(i).to_string() + "  ";
+        lives += std::to_string(j) + " " +
+                 result.ass_as_ranges.at(j).get(i).to_string(in.instr_set) + "  ";
       }
     }
 
@@ -63,11 +64,11 @@ void print_result(const AllocationInput& in, const AllocationResult& result) {
       code_str.push_back('~');
     }
     printf("[%03d] %30s | %30s | %30s\n", (int)i, code_str.c_str(), lives.c_str(),
-           result.stack_ops.at(i).print().c_str());
+           result.stack_ops.at(i).print(in.instr_set).c_str());
   }
 }
 
-std::string Assignment::to_string() const {
+std::string Assignment::to_string(emitter::InstructionSet instr_set) const {
   std::string result;
   if (spilled) {
     result += "*";
@@ -76,9 +77,14 @@ std::string Assignment::to_string() const {
     case Kind::STACK:
       result += fmt::format("s[{:2d}]", stack_slot);
       break;
-    case Kind::REGISTER:
-      result += emitter::gRegInfo.get_info(reg).name;
+    case Kind::REGISTER: {
+      // On ARM64 a bare id is ambiguous (X8 and V8 are both id 8).  The GPR
+      // table is the right default for allocator output; SIMD-class values are
+      // disambiguated by the caller's reg_class where it matters.
+      const auto& info = emitter::get_register_info(instr_set);
+      result += info.get_info(reg).name;
       break;
+    }
     case Kind::UNASSIGNED:
       result += "unassigned";
       break;
@@ -306,7 +312,7 @@ std::string RegAllocBasicBlock::print(const std::vector<RegAllocInstr>& insts) {
 /*!
  * Print for debugging
  */
-std::string RegAllocInstr::print() const {
+std::string RegAllocInstr::print(emitter::InstructionSet instr_set) const {
   bool first = true;
   std::string result = "(";
 
@@ -337,8 +343,13 @@ std::string RegAllocInstr::print() const {
     }
     first = false;
     result += "(clobber";
-    for (auto& i : clobber) {
-      result += " " + i.print();
+    for (size_t ci = 0; ci < clobber.size(); ci++) {
+      const bool simd =
+          ci < clobber_classes.size() &&
+          emitter::reg_class_to_hw(clobber_classes.at(ci)) == emitter::HWRegKind::XMM;
+      const auto& ri = emitter::get_register_info(instr_set);
+      result += " " + (simd ? ri.get_simd_info(clobber.at(ci)).name
+                            : ri.get_info(clobber.at(ci)).name);
     }
     result += ")";
   }
@@ -358,16 +369,31 @@ std::string RegAllocInstr::print() const {
   return result;
 }
 
-std::string StackOp::print() const {
+namespace {
+// Resolve a register id to a name using the right table for the target and the
+// value's class.  ARM64 shares ids between GPRs and SIMD, so the class matters.
+const std::string& reg_name_for(emitter::InstructionSet instr_set,
+                                emitter::Register reg,
+                                RegClass reg_class) {
+  const auto& ri = emitter::get_register_info(instr_set);
+  if (reg_class != RegClass::INVALID &&
+      emitter::reg_class_to_hw(reg_class) == emitter::HWRegKind::XMM) {
+    return ri.get_simd_info(reg).name;
+  }
+  return ri.get_info(reg).name;
+}
+}  // namespace
+
+std::string StackOp::print(emitter::InstructionSet instr_set) const {
   std::string result;
   bool added = false;
   for (const auto& op : ops) {
     if (op.load) {
-      result += fmt::format("{} <- [{:2d}], ", emitter::gRegInfo.get_info(op.reg).name, op.slot);
+      result += fmt::format("{} <- [{:2d}], ", reg_name_for(instr_set, op.reg, op.reg_class), op.slot);
       added = true;
     }
     if (op.store) {
-      result += fmt::format("{} -> [{:2d}], ", emitter::gRegInfo.get_info(op.reg).name, op.slot);
+      result += fmt::format("{} -> [{:2d}], ", reg_name_for(instr_set, op.reg, op.reg_class), op.slot);
       added = true;
     }
   }
