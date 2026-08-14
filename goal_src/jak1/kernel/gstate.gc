@@ -344,6 +344,14 @@ It type checks the arguments for the entry function.
          ;; - make sure that when this code returns, we do a deactivate
          ;; - reset the stack to the top, so we can't just call the code.
          (rlet ((temp)
+                ;; ARM64: the return trampoline must reach x30, and the only
+                ;; `.push` that lowers to `mov x30, x8` is one whose source is
+                ;; the rax/X8 role (IR.cpp IR_AsmPush::do_codegen_arm64). An
+                ;; unconstrained `temp` gets an arbitrary register, so its
+                ;; `.push` emits a REAL stack push, x30 is never loaded, and the
+                ;; state `code` function returns through a stale/zero x30.
+                ;; jak2 already had this; jak1's mirror had missed it.
+                (arm-temp :reg rax)
                 (func)
                 (sp :reg rsp :type uint)
                 (off :reg r15 :type uint)
@@ -367,7 +375,12 @@ It type checks the arguments for the entry function.
            ;; push the return trampoline for when code returns.
            (.mov temp return-from-thread-dead) ;; will deactivate
            (.add temp off)
-           (.push temp)
+           (#if ARM64_TARGET
+             (begin
+               (.mov arm-temp temp)
+               (.push :color #f arm-temp))
+             (.push temp)
+             )
            ;; and call!
            (.jr func)
            ;; stupid hack so the compiler doesn't throw away these registers.
