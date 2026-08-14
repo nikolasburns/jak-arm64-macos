@@ -235,6 +235,15 @@ _call_goal_asm_arm64:
   ; ARM64 requires 16-byte stack pointer alignment
   stp x20, x21, [sp, #-16]!
   str x22, [sp, #-16]!
+  ;; The GOAL register allocator owns x19 and x23-x28 (RegisterInfo::m_saved_gprs).
+  ;; Ordinary GOAL functions spill them in their own prologues, but asm-funcs
+  ;; and hand-written GOAL entry paths modify them without backing them up.
+  ;; The C caller keeps globals pinned here (FastLink in x27, DebugSegment in
+  ;; x25, ...), so preserve the whole set across the GOAL call.
+  stp x23, x24, [sp, #-16]!
+  stp x25, x26, [sp, #-16]!
+  stp x27, x28, [sp, #-16]!
+  str x19, [sp, #-16]!
 
   ;; x0 - first arg
   ;; x1 - second arg
@@ -253,6 +262,10 @@ _call_goal_asm_arm64:
   blr x3
 
   ;; restore saved registers.
+  ldr x19, [sp], #16
+  ldp x27, x28, [sp], #16
+  ldp x25, x26, [sp], #16
+  ldp x23, x24, [sp], #16
   ldr x22, [sp], #16
   ldp x20, x21, [sp], #16
   ldp	x29, x30, [sp], #16
@@ -267,6 +280,11 @@ _call_goal8_asm_arm64:
   ; ARM64 requires 16-byte stack pointer alignment
   stp x20, x21, [sp, #-16]!
   str x22, [sp, #-16]!
+  ;; see _call_goal_asm_arm64: GOAL may modify x19/x23-x28 without restoring.
+  stp x23, x24, [sp, #-16]!
+  stp x25, x26, [sp, #-16]!
+  stp x27, x28, [sp, #-16]!
+  str x19, [sp, #-16]!
 
   ;; x0 - first arg (func)
   ;; x1 - second arg (arg array)
@@ -296,6 +314,10 @@ _call_goal8_asm_arm64:
   blr x8
 
   ;; retore registers.
+  ldr x19, [sp], #16
+  ldp x27, x28, [sp], #16
+  ldp x25, x26, [sp], #16
+  ldp x23, x24, [sp], #16
   ldr x22, [sp], #16
   ldp x20, x21, [sp], #16
   ldp	x29, x30, [sp], #16
@@ -318,6 +340,13 @@ _call_goal_on_stack_asm_arm64:
   ; ARM64 requires 16-byte stack pointer alignment
   stp x20, x21, [sp, #-16]!
   str x22, [sp, #-16]!
+  ;; see _call_goal_asm_arm64: GOAL may modify x19/x23-x28 without restoring.
+  ;; These must be pushed before the stack switch so they live on the native
+  ;; stack, not the GOAL stack.
+  stp x23, x24, [sp, #-16]!
+  stp x25, x26, [sp, #-16]!
+  stp x27, x28, [sp, #-16]!
+  str x19, [sp, #-16]!
   ;; Save the old stack pointer in the new stack. It must be below the
   ;; callee's entry SP so the callee's own prologue cannot overwrite it.
   mov x9, sp
@@ -336,6 +365,10 @@ _call_goal_on_stack_asm_arm64:
   ;; Restore the old stack before loading the saved callee-saved registers.
   ldr x9, [sp], #16
   mov sp, x9
+  ldr x19, [sp], #16
+  ldp x27, x28, [sp], #16
+  ldp x25, x26, [sp], #16
+  ldp x23, x24, [sp], #16
   ldr x22, [sp], #16
   ldp x20, x21, [sp], #16
   ldp	x29, x30, [sp], #16

@@ -445,11 +445,11 @@
          ;; operand; the historical rax role maps to x8 and has special
          ;; .push/.pop handling.
          (saved-lr :reg r9 :type uint)
-         (s0 :reg rbx :type uint)
-         (s1 :reg rbp :type uint)
-         (s2 :reg r10 :type uint)
-         (s3 :reg r11 :type uint)
-         (s4 :reg r12 :type uint))
+         (s0 :reg saved-gpr0 :type uint)
+         (s1 :reg saved-gpr1 :type uint)
+         (s2 :reg saved-gpr2 :type uint)
+         (s3 :reg saved-gpr3 :type uint)
+         (s4 :reg saved-gpr4 :type uint))
     ;; get the kernel stack pointer as a GOAL pointer (won't use a temp reg)
     (.load-sym :sext #f sp *kernel-sp*)
     ;; convert it back to a real pointer
@@ -492,11 +492,11 @@
          (temp :reg rax :type uint)
          ;; see return-from-thread: r9/x5 is a real stack operand, rax/x8 is not.
          (saved-lr :reg r9 :type uint)
-         (s0 :reg rbx :type uint)
-         (s1 :reg rbp :type uint)
-         (s2 :reg r10 :type uint)
-         (s3 :reg r11 :type uint)
-         (s4 :reg r12 :type uint))
+         (s0 :reg saved-gpr0 :type uint)
+         (s1 :reg saved-gpr1 :type uint)
+         (s2 :reg saved-gpr2 :type uint)
+         (s3 :reg saved-gpr3 :type uint)
+         (s4 :reg saved-gpr4 :type uint))
     ;; first call the deactivate method.
     (deactivate pp)
     ;; get the kernel stack pointer as a GOAL pointer
@@ -556,11 +556,11 @@
     (rlet ((pp :reg r13 :type process)
          (sp :reg rsp :type uint)
          (off :reg r15 :type uint)
-         (s0 :reg rbx :type uint)
-         (s1 :reg rbp :type uint)
-         (s2 :reg r10 :type uint)
-         (s3 :reg r11 :type uint)
-         (s4 :reg r12 :type uint)
+         (s0 :reg saved-gpr0 :type uint)
+         (s1 :reg saved-gpr1 :type uint)
+         (s2 :reg saved-gpr2 :type uint)
+         (s3 :reg saved-gpr3 :type uint)
+         (s4 :reg saved-gpr4 :type uint)
          (temp :reg rax :type uint)
          ;; Keep the kernel continuation in the historical r9 role (ARM64 x5),
          ;; whose .push/.pop pair really uses the stack; rax/x8 is special.
@@ -625,11 +625,11 @@
          (sp :reg rsp :type uint)
          ;; see return-from-thread: r9/x5 is a real stack operand, rax/x8 is not.
          (saved-lr :reg r9 :type uint)
-         (s0 :reg rbx :type uint)
-         (s1 :reg rbp :type uint)
-         (s2 :reg r10 :type uint)
-         (s3 :reg r11 :type uint)
-         (s4 :reg r12 :type uint)
+         (s0 :reg saved-gpr0 :type uint)
+         (s1 :reg saved-gpr1 :type uint)
+         (s2 :reg saved-gpr2 :type uint)
+         (s3 :reg saved-gpr3 :type uint)
+         (s4 :reg saved-gpr4 :type uint)
          (xmm8 :reg xmm8 :class fpr)
          (xmm9 :reg xmm9 :class fpr)
          (xmm10 :reg xmm10 :class fpr)
@@ -737,11 +737,11 @@
          (temp :reg rax :type uint)
          (off :reg r15 :type uint)
          (sp :reg rsp :type uint)
-         (s0 :reg rbx :type uint)
-         (s1 :reg rbp :type uint)
-         (s2 :reg r10 :type uint)
-         (s3 :reg r11 :type uint)
-         (s4 :reg r12 :type uint)
+         (s0 :reg saved-gpr0 :type uint)
+         (s1 :reg saved-gpr1 :type uint)
+         (s2 :reg saved-gpr2 :type uint)
+         (s3 :reg saved-gpr3 :type uint)
+         (s4 :reg saved-gpr4 :type uint)
          (a4 :reg r8 :type uint)
          (a5 :reg r9 :type uint)
          (temp-float :reg xmm0 :class fpr)
@@ -1944,11 +1944,12 @@
   (declare (asm-func none)
            ;;(print-asm)
            )
-  (rlet ((s0 :reg rbx :type uint)
-         (s1 :reg rbp :type uint)
-         (s2 :reg r10 :type uint)
-         (s3 :reg r11 :type uint)
-         (s4 :reg r12 :type uint)
+  (with-context-extra-saved-gprs
+    (rlet ((s0 :reg saved-gpr0 :type uint)
+         (s1 :reg saved-gpr1 :type uint)
+         (s2 :reg saved-gpr2 :type uint)
+         (s3 :reg saved-gpr3 :type uint)
+         (s4 :reg saved-gpr4 :type uint)
          (a0 :reg rdi :type uint) ; ok
          (a1 :reg rsi :type uint) ; ok
          (a2 :reg rdx :type uint) ; ok
@@ -1961,14 +1962,19 @@
     (.add temp off)
     (.push temp)
     ;; stack is 16 + 8 aligned now
+    ;; Keep the historical mapping byte-for-byte intact on x86. ARM64 adds
+    ;; the two argument registers backed by x27/x28.
     (.mov :color #f a0 s1)
     (.mov :color #f a1 s2)
     (.mov :color #f a2 s3)
     (.mov :color #f a3 s4)
+    (#when ARM64_TARGET
+      (.mov :color #f a4 s5)
+      (.mov :color #f a5 s6))
     (.add :color #f s0 off)
     (.jr :color #f s0)
     (.add a4 a4)
-    (.add a5 a5)))
+    (.add a5 a5))))
 
 (defun set-to-run ((thread cpu-thread) (func function) a0 a1 a2 a3 a4 a5)
   "Set the given thread to call the given function with the given arguments next time it resumes.
