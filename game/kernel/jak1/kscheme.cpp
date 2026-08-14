@@ -3,10 +3,12 @@
 #include <cstring>
 
 #include "common/common_types.h"
+#include "common/jit_memory.h"
 #include "common/log/log.h"
 #include "common/symbols.h"
 #include "common/util/Timer.h"
 
+#include "game/kernel/common/arm64_trampoline.h"
 #include "game/kernel/common/fileio.h"
 #include "game/kernel/common/kdgo.h"
 #include "game/kernel/common/kdsnetm.h"
@@ -284,17 +286,30 @@ void _arg_call_arm64();
  * But calling this function is fast. It used to be really fast but wrong.
  */
 Ptr<Function> make_function_from_c_systemv(void* func, bool arg3_is_pp) {
+#if defined(__aarch64__)
+  if (g_ee_main_mem && kglobalheap.offset) {
+    jit_memory::make_writable(kglobalheap->current.c(), 0x40);
+  }
+#endif
   auto mem = Ptr<u8>(alloc_heap_object(s7.offset + FIX_SYM_GLOBAL_HEAP,
                                        *(s7 + FIX_SYM_FUNCTION_TYPE), 0x40, UNKNOWN_PP));
+#if defined(__aarch64__)
+  {
+    jit_memory::JitWriteScope scope(mem.c(), 0x40);
+    const auto code_size = arm64_trampoline::emit_c_function(
+        mem.c(), func, reinterpret_cast<void*>(reinterpret_cast<uintptr_t>(_arg_call_arm64)),
+        arg3_is_pp);
+    scope.flush_instruction_cache();
+    (void)code_size;
+  }
+  // See make_nothing_func: keep the surrounding heap page writable for init.
+  jit_memory::make_writable(mem.c(), 0x40);
+  return mem.cast<Function>();
+#else
   auto f = (uint64_t)func;
   auto target_function = (u8*)&f;
-#ifndef __aarch64__
   auto trampoline_function_addr = _arg_call_systemv;
-#else
-  auto trampoline_function_addr = _arg_call_arm64;
-#endif
   auto trampoline = (u8*)&trampoline_function_addr;
-  // TODO - x86 code still being emitted below
 
   // movabs rax, target_function
   int offset = 0;
@@ -329,6 +344,7 @@ Ptr<Function> make_function_from_c_systemv(void* func, bool arg3_is_pp) {
   // CacheFlush(mem, 0x34);
 
   return mem.cast<Function>();
+#endif
 }
 
 /*!
@@ -417,16 +433,30 @@ void _stack_call_arm64();
 }
 
 Ptr<Function> make_stack_arg_function_from_c_systemv(void* func) {
+#if defined(__aarch64__)
+  if (g_ee_main_mem && kglobalheap.offset) {
+    jit_memory::make_writable(kglobalheap->current.c(), 0x40);
+  }
+#endif
   // allocate a function object on the global heap
   auto mem = Ptr<u8>(alloc_heap_object(s7.offset + FIX_SYM_GLOBAL_HEAP,
                                        *(s7 + FIX_SYM_FUNCTION_TYPE), 0x40, UNKNOWN_PP));
+#if defined(__aarch64__)
+  {
+    jit_memory::JitWriteScope scope(mem.c(), 0x40);
+    const auto code_size = arm64_trampoline::emit_c_function(
+        mem.c(), func, reinterpret_cast<void*>(reinterpret_cast<uintptr_t>(_stack_call_arm64)),
+        false);
+    scope.flush_instruction_cache();
+    (void)code_size;
+  }
+  // See make_nothing_func: keep the surrounding heap page writable for init.
+  jit_memory::make_writable(mem.c(), 0x40);
+  return mem.cast<Function>();
+#else
   auto f = (uint64_t)func;
   auto target_function = (u8*)&f;
-#ifndef __aarch64__
   auto trampoline_function_addr = _stack_call_systemv;
-#else
-  auto trampoline_function_addr = _stack_call_arm64;
-#endif
   auto trampoline = (u8*)&trampoline_function_addr;
 
   // movabs rax, target_function
@@ -454,6 +484,7 @@ Ptr<Function> make_stack_arg_function_from_c_systemv(void* func) {
   // CacheFlush(mem, 0x34);
 
   return mem.cast<Function>();
+#endif
 }
 
 #ifdef _WIN32
@@ -529,12 +560,29 @@ Ptr<Function> make_stack_arg_function_from_c(void* func) {
  * Create a GOAL function which does nothing and immediately returns.
  */
 Ptr<Function> make_nothing_func() {
+#if defined(__aarch64__)
+  if (g_ee_main_mem && kglobalheap.offset) {
+    jit_memory::make_writable(kglobalheap->current.c(), 0x40);
+  }
+#endif
   auto mem = Ptr<u8>(alloc_heap_object(s7.offset + FIX_SYM_GLOBAL_HEAP,
                                        *(s7 + FIX_SYM_FUNCTION_TYPE), 0x14, UNKNOWN_PP));
 
+#if defined(__aarch64__)
+  {
+    jit_memory::JitWriteScope scope(mem.c(), 0x14);
+    const auto code_size = arm64_trampoline::emit_nothing(mem.c());
+    scope.flush_instruction_cache();
+    (void)code_size;
+  }
+  // The scope re-protects the whole page as executable on destruction, but the
+  // GOAL heap around this trampoline is ordinary data that init still writes.
+  jit_memory::make_writable(mem.c(), 0x14);
+#else
   // a single x86-64 ret.
   mem.c()[0] = 0xc3;
   // CacheFlush(mem, 8);
+#endif
   return mem.cast<Function>();
 }
 
@@ -542,14 +590,29 @@ Ptr<Function> make_nothing_func() {
  * Create a GOAL function which returns 0.
  */
 Ptr<Function> make_zero_func() {
+#if defined(__aarch64__)
+  if (g_ee_main_mem && kglobalheap.offset) {
+    jit_memory::make_writable(kglobalheap->current.c(), 0x40);
+  }
+#endif
   auto mem = Ptr<u8>(alloc_heap_object(s7.offset + FIX_SYM_GLOBAL_HEAP,
                                        *(s7 + FIX_SYM_FUNCTION_TYPE), 0x14, UNKNOWN_PP));
+#if defined(__aarch64__)
+  {
+    jit_memory::JitWriteScope scope(mem.c(), 0x14);
+    const auto code_size = arm64_trampoline::emit_zero(mem.c());
+    scope.flush_instruction_cache();
+    (void)code_size;
+  }
+  jit_memory::make_writable(mem.c(), 0x14);
+#else
   // xor eax, eax
   mem.c()[0] = 0x31;
   mem.c()[1] = 0xc0;
   // ret
   mem.c()[2] = 0xc3;
   // CacheFlush(mem, 8);
+#endif
   return mem.cast<Function>();
 }
 
@@ -986,6 +1049,12 @@ u64 method_set(u32 type_, u32 method_id, u32 method) {
   }
 
   // do the set
+#if defined(__APPLE__) && defined(__aarch64__) && !OG_EXECUTION_MODE_AOT
+  // Method tables live in the GOAL heap and can share a page with code that
+  // linking already flipped to executable. Reopen it before writing.
+  jit_memory::make_writable(&type->get_method(method_id).offset,
+                            sizeof(type->get_method(method_id).offset));
+#endif
   type->get_method(method_id).offset = method;
 
   // this is kind of a strange combination...
