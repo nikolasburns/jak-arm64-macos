@@ -1,0 +1,26 @@
+#!/bin/sh
+# Block a push if gitleaks finds a secret in the commits being pushed.
+# Install:  git config core.hooksPath .githooks
+# Bypass (only if you have verified the finding is a false positive):
+#   git push --no-verify
+if ! command -v gitleaks >/dev/null 2>&1; then
+  echo "pre-push: gitleaks not installed; skipping secret scan." >&2
+  echo "          brew install gitleaks   (this repo is PUBLIC — please install it)" >&2
+  exit 0
+fi
+echo "pre-push: scanning for secrets with gitleaks..."
+if ! gitleaks detect --source . --log-opts="--all" --redact --no-banner; then
+  cat >&2 <<'MSG'
+
+pre-push BLOCKED: gitleaks reported a finding.
+
+This repository is PUBLIC. If a real credential is involved, deleting the file
+is NOT sufficient — published history cannot be un-published. ROTATE the
+credential first, then decide whether a history rewrite is warranted.
+
+If this is a known false positive (e.g. third-party test fixtures), add it to
+.gitleaksignore rather than bypassing the hook permanently.
+MSG
+  exit 1
+fi
+exit 0
