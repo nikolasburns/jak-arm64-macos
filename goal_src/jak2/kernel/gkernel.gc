@@ -1912,15 +1912,22 @@
            (allow-saved-regs) ;; very dangerous!
            )
 
+  ;; The historical x86 role names cover only TWO of the seven ARM64 saved
+  ;; GPRs (rbx->X19, r12->X23; rbp/r10/r11 map to X29/X6/X7, which are not
+  ;; allocator-saved), so X24-X28 stayed live across a catch and a `throw`
+  ;; resumed with a stale context.  Use the target-selected saved-gpr roles,
+  ;; as the thread context-switch routines above already do.  x86 is
+  ;; unaffected: there saved-gpr0..4 ARE rbx/rbp/r10/r11/r12.
+  (with-context-extra-saved-gprs
   (rlet ((pp :reg r13 :type process)
          (temp :reg rax :type uint)
          (off :reg r15 :type uint)
          (sp :reg rsp :type uint)
-         (s0 :reg rbx :type uint)
-         (s1 :reg rbp :type uint)
-         (s2 :reg r10 :type (pointer uint64))
-         (s3 :reg r11 :type uint)
-         (s4 :reg r12 :type uint)
+         (s0 :reg saved-gpr0 :type uint)
+         (s1 :reg saved-gpr1 :type uint)
+         (s2 :reg saved-gpr2 :type (pointer uint64))
+         (s3 :reg saved-gpr3 :type uint)
+         (s4 :reg saved-gpr4 :type uint)
 
          (xmm8 :reg xmm8 :class fpr)
          (xmm9 :reg xmm9 :class fpr)
@@ -1962,6 +1969,12 @@
       (set-u128-as-u64! (-> this rreg 3) temp)
       (.mov :color #f temp s4)
       (set-u128-as-u64! (-> this rreg 4) temp)
+      ;; ARM64 has two more saved GPRs (X27, X28) than the historical five.
+      (#when ARM64_TARGET
+        (.mov :color #f temp s5)
+        (set-u128-as-u64! (-> this rreg 5) temp)
+        (.mov :color #f temp s6)
+        (set-u128-as-u64! (-> this rreg 6) temp))
 
       (.mov :color #f temp xmm8)
       (set! (-> this freg 0) (the-as float temp))
@@ -2024,23 +2037,25 @@
         )
       )
     )
-  )
+  ))
 
 (defun throw-dispatch ((this catch-frame) value)
   "Throw the given value to the catch frame.
   Only can throw a 64-bit value. The original could throw 128 bits."
   (declare (asm-func none))
 
+  ;; Must mirror `new catch-frame` exactly — see the comment there.
+  (with-context-extra-saved-gprs
   (rlet ((pp :reg r13 :type process)
          (temp :reg rax :type uint)
          (return-value :reg rdi :type uint)
          (off :reg r15 :type uint)
          (sp :reg rsp :type uint)
-         (s0 :reg rbx :type uint)
-         (s1 :reg rbp :type uint)
-         (s2 :reg r10 :type (pointer uint64))
-         (s3 :reg r11 :type uint)
-         (s4 :reg r12 :type uint)
+         (s0 :reg saved-gpr0 :type uint)
+         (s1 :reg saved-gpr1 :type uint)
+         (s2 :reg saved-gpr2 :type (pointer uint64))
+         (s3 :reg saved-gpr3 :type uint)
+         (s4 :reg saved-gpr4 :type uint)
 
          (temp-float :reg xmm0 :class fpr)
          (xmm8 :reg xmm8 :class fpr)
@@ -2067,6 +2082,12 @@
     (.mov :color #f s3 temp)
     (set-u64-from-u128! temp (-> this rreg 4))
     (.mov :color #f s4 temp)
+    ;; ARM64's two extra saved GPRs (X27, X28).
+    (#when ARM64_TARGET
+      (set-u64-from-u128! temp (-> this rreg 5))
+      (.mov :color #f s5 temp)
+      (set-u64-from-u128! temp (-> this rreg 6))
+      (.mov :color #f s6 temp))
 
     (set! temp-float (-> this freg 0))
     (.mov :color #f xmm8 temp-float)
@@ -2107,7 +2128,7 @@
     (.mov temp value)
     (.ret)
     )
-  )
+  ))
 
 (defun throw ((name symbol) value)
   "Dynamic throw."
