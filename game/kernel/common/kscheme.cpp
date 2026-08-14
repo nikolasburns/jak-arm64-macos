@@ -7,6 +7,7 @@
 
 #include "common/aot/AotExecution.h"
 #include "common/goal_constants.h"
+#include "common/log/log.h"
 #include "common/platform/BuildConfig.h"
 
 #include "game/kernel/common/fileio.h"
@@ -153,6 +154,27 @@ u64 call_goal(Ptr<Function> f, u64 a, u64 b, u64 c, u64 st, void* offset) {
 #else
   // auto st_ptr = (void*)((uint8_t*)(offset) + st); updated for the new compiler!
   void* st_ptr = (void*)st;
+
+  // HOOKGUARD, C-side door (session 11). Every C->GOAL entry funnels through
+  // here. If the #f is consumed on the C side, the GOAL-side guards cannot see
+  // it by construction, so a fully-silent run would be only suggestive. This
+  // makes it conclusive. Reports and then STILL CALLS, preserving the crash.
+  // Env-gated so it costs nothing when unset.
+  if (f.offset == 0 || f.offset == 0xffffffff) {
+    static bool warned = false;
+    if (!warned) {
+      warned = true;
+      lg::error("HOOKGUARD-C call_goal: NULL/invalid function offset {:#x} (a={:#x} b={:#x} c={:#x})",
+                f.offset, a, b, c);
+    }
+  }
+  if (getenv("HOOKGUARD_CALLGOAL")) {
+    static bool alive = false;
+    if (!alive) {
+      alive = true;
+      lg::warn("HOOKGUARD ALIVE: first call_goal, f={:#x}", f.offset);
+    }
+  }
 
   void* fptr = f.c();
 #ifdef __linux__

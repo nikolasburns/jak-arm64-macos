@@ -586,6 +586,8 @@
 ;; Fires a one-shot "GUARD ALIVE" on the first healthy dispatch so a silent
 ;; guard can never be mistaken for a clean run.
 (define *hookguard-alive* #f)
+(define *hookguard-alive2* #f)
+(define *hookguard-listener-count* 0)
 
 (defmacro hookguard (branch-name proc tested)
   "Re-read the hook slot, compare with the value the cond tested, and report.
@@ -1498,6 +1500,12 @@
   ;; execute the listener function, if we got one.
   (when *listener-function*
     (+! *enable-method-set* 1) ;; allow out-of-order method definitions (slower)
+    ;; HOOKGUARD (session 11): count EVERY listener dispatch, not just #f ones.
+    ;; A slot that is #f by design fires rarely, so the count is what tells us
+    ;; whether this path runs during attract at all.
+    (+! *hookguard-listener-count* 1)
+    (format 0 "HOOKGUARD listener dispatch #~D, func #x~X~%"
+            *hookguard-listener-count* (the int *listener-function*))
     (let ((result (reset-and-call (-> *listener-process* main-thread) *listener-function*))) ;; run function!
       ;; print result.
       (if *use-old-listener-print*
@@ -2076,6 +2084,26 @@
   Once the function returns, the process deactivates."
   (let ((proc (-> thread process)))
     (set! (-> proc status) 'waiting-to-run)
+    ;; HOOKGUARD (session 11): `func` lands in rreg 0, is restored by
+    ;; thread-resume into saved-gpr0 (= X19 on ARM64), and is the target of
+    ;; `(.jr s0)` in set-to-run-bootstrap. A #f/0 here IS the observed crash:
+    ;; every capture has x19 = 0 with pc = 0 and sp at stack-top -- and
+    ;; set-to-run resets sp to stack-top three lines below, which is why the
+    ;; stack looks freshly reset. Report it here, where the process identity is
+    ;; still available, then let it through so the crash is preserved.
+    (when (not *hookguard-alive2*)
+      (set! *hookguard-alive2* #t)
+      (format 0 "HOOKGUARD ALIVE: first set-to-run, proc ~A, func #x~X~%" proc (the int func)))
+    (when (not func)
+      (format 0 "HOOKGUARD HIT branch=set-to-run (func is #f -- this is the pc=0 crash)~%")
+      (format 0 "  process   = ~A~%" proc)
+      (format 0 "  type      = ~A~%" (-> proc type))
+      (format 0 "  status    = ~A~%" (-> proc status))
+      (format 0 "  state     = ~A~%" (-> proc state))
+      (format 0 "  thread    = ~A~%" thread)
+      (format 0 "  slot addr = #x~X~%" (&-> thread rreg 0))
+      (format 0 "  func      = #x~X~%" (the int func))
+      (hookguard-report (the int (&-> thread rreg 0)) (the int func) (the int func)))
     ;; we store arguments and the function to call in saved registers
     (set! (-> thread rreg 0) (the uint func))
     (set! (-> thread rreg 1) (the uint a0))
