@@ -116,7 +116,7 @@ void KernelCheckAndDispatch() {
 
   // SYMWATCH=<hex slot offsets, comma separated>: print the value at each slot
   // every N dispatches. Offsets must come from SYMDUMP (the linker's own
-  // name->slot mapping) — lldb name lookup is unsound here, see CLAUDE.md.
+  // name->slot mapping) — lldb name lookup is unsound here, see PORTING-NOTES.md.
   std::vector<u32> symwatch;
   if (const char* w = getenv("SYMWATCH")) {
     const char* p = w;

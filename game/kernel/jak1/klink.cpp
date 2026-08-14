@@ -157,7 +157,7 @@ uint32_t symlink_v3(Ptr<uint8_t> link, Ptr<uint8_t> data) {
   // SYMDUMP=<comma-separated names>: print the authoritative slot offset for
   // these symbols as the linker resolves them. The linker runs in real runtime
   // context, so this is the only reliable name->slot mapping available (lldb
-  // name lookup is unsound here; see CLAUDE.md).
+  // name lookup is unsound here; see PORTING-NOTES.md).
   if (const char* want = getenv("SYMDUMP")) {
     if (strstr(want, sym_name)) {
       fprintf(stderr, "SYMDUMP obj=%-16s %-28s slot=0x%x s7rel=%d value=0x%x\n",
@@ -222,7 +222,7 @@ static void partcensus_check(const char* after_object) {
     return;
   }
   // Resolve the table by SYMBOL, then sanity-check the array header before
-  // trusting it -- per CLAUDE.md, a name lookup that "succeeds" is not enough.
+  // trusting it -- per PORTING-NOTES.md, a name lookup that "succeeds" is not enough.
   auto sym = jak1::find_symbol_from_c("*part-group-id-table*");
   if (!sym.offset) {
     lg::error("PARTCENSUS: symbol *part-group-id-table* not found after {}", after_object);

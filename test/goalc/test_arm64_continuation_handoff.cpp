@@ -1,4 +1,4 @@
-// ARM64 continuation-handoff sentinels (session 11).
+// ARM64 continuation-handoff sentinels.
 //
 // WHY THIS FILE EXISTS
 // --------------------
@@ -8,10 +8,10 @@
 // `ret` pops the pushed address. Silently wrong on ARM64, where `ret` and `br`
 // use x30 and ignore the stack entirely.
 //
-//   1. session 10 -- `(method deactivate process)` and `enter-state` used a raw
+//   1. `(method deactivate process)` and `enter-state` used a raw
 //      `(.push temp) (.ret)`. ARM64 `ret` branched to a stale x30, returning to
 //      the caller and recursing until the 8 MB dram stack was exhausted.
-//   2. session 11 -- `enter-state`'s trampoline `.push` was emitted from an
+//   2. `enter-state`'s trampoline `.push` was emitted from an
 //      UNCONSTRAINED register, so it never hit the `src_reg == X8` case in
 //      IR_AsmPush::do_codegen_arm64 and never became `mov x30, x8`. x30 was
 //      therefore never loaded before `(.jr func)`.
@@ -37,7 +37,7 @@
 //
 // MUTATION-VERIFIED: with `src_reg == X8` disabled in IR_AsmPush, both
 // PushFromRaxRoleInstallsX30 and the X8 row of PushIdiomLoweringTable FAIL.
-// Recorded in PROGRESS.md session 11.
+// Mutation procedure and rationale: see PORTING-NOTES.md and CASE-STUDIES.md.
 
 #include <cstring>
 #include <memory>
@@ -127,7 +127,7 @@ u32 str_pre_index_for(Register reg) {
 
 }  // namespace
 
-// THE test for the session-11 defect. A push whose source is the rax/X8 role
+// THE test for the trampoline defect. A push whose source is the rax/X8 role
 // MUST become `mov x30, x8` and MUST NOT emit a stack push. Disabling the
 // src_reg==X8 branch in IR_AsmPush::do_codegen_arm64 turns this red.
 TEST(Arm64ContinuationHandoff, PushFromRaxRoleInstallsX30) {
@@ -137,14 +137,14 @@ TEST(Arm64ContinuationHandoff, PushFromRaxRoleInstallsX30) {
       << std::hex << word
       << "). The ARM64 continuation handoff is broken: a `.push rax` before "
          "`.ret`/`.jr` will not install the return address, which is the "
-         "session-11 enter-state bug.";
+         "enter-state trampoline bug.";
   EXPECT_NE(str_pre_index_for(X8), word)
       << "IR_AsmPush with an X8 source emitted a real stack push; on ARM64 the "
          "pushed value is ignored by `ret`/`br`.";
 }
 
 // The complement: a push from any NON-rax register must stay a real stack push
-// and must NOT install x30. This is what made the session-11 bug possible (an
+// and must NOT install x30. This is what made the trampoline bug possible (an
 // unconstrained `temp` landed in x4), so it is pinned as intended behaviour
 // rather than left implicit.
 TEST(Arm64ContinuationHandoff, PushFromOtherRegisterStaysAStackPush) {
@@ -161,7 +161,7 @@ TEST(Arm64ContinuationHandoff, PushFromOtherRegisterStaysAStackPush) {
 
 // Class-level tripwire: walk the x86-push-idiom input shapes the kernel uses and
 // pin the ARM64 output for each. Covers the OTHER members of the bug class
-// alongside enter-state -- `abandon-thread`'s `.push temp` (session 10),
+// alongside enter-state -- `abandon-thread`'s `.push temp`,
 // `set-to-run-bootstrap`'s trampoline install, and the `(method new
 // catch-frame)` / `throw-dispatch` address rewrites, all of which are `.push`
 // from the rax role in goal_src and MUST lower to the x30 form.
@@ -178,7 +178,7 @@ TEST(Arm64ContinuationHandoff, PushIdiomLoweringTable) {
        "set-to-run-bootstrap, enter-state (fixed), new catch-frame, "
        "throw-dispatch"},
       {X4, false,
-       "(.push temp) with an UNCONSTRAINED temp -- the session-11 enter-state "
+       "(.push temp) with an UNCONSTRAINED temp -- the enter-state trampoline "
        "defect; must stay a plain stack push"},
       {X9, false, "(.push <scratch>) -- ordinary stack traffic"},
       {X19, false, "(.push <callee-saved>) -- ordinary stack traffic"},

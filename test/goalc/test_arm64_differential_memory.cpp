@@ -2,7 +2,7 @@
  * @file test_arm64_differential_memory.cpp
  * Differential tests for the GOAL memory-access emitters (step-1 harness debt).
  *
- * CLAUDE.md records that 13 of 14 ARM64 memory/vector emitters shipped with zero
+ * PORTING-NOTES.md records that 13 of 14 ARM64 memory/vector emitters shipped with zero
  * coverage.  They were written for Jak 2; Jak 1 exercises more of them, and the
  * failure mode this class of bug produces is a gameplay glitch rather than a
  * crash -- which is exactly why they need executed tests rather than
@@ -196,7 +196,7 @@ TEST(ARM64DifferentialMemory, GoalGprOffsetRanges) {
 }
 
 /*!
- * splat_vf -- the lane-order trap CLAUDE.md explicitly warns about.  The ARM64
+ * splat_vf -- the lane-order trap PORTING-NOTES.md explicitly warns about.  The ARM64
  * implementation uses NEON DUP with a hand-written X/Y/Z/W -> lane mapping, so a
  * transposed mapping would silently produce wrong vectors in gameplay.  Each
  * element is given a distinct value so a wrong lane cannot coincidentally pass.

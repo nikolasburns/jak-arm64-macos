@@ -85,3 +85,14 @@ unifont-15.0.03.ttf
 *.diff
 goalc-report.html
 _new-all-types.gc
+
+# --- ARM64 port: local working notes and session artifacts ---
+# Private engineering log and assistant-directed workflow notes. The publishable
+# distillations live in PORTING-NOTES.md and CASE-STUDIES.md, which ARE tracked.
+CLAUDE.md
+PROGRESS.md
+# Debug captures from local runs (boot logs, lldb transcripts).
+diag/
+log/
+# Local scratch
+*.bak
