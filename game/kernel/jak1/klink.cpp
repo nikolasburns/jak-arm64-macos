@@ -19,6 +19,9 @@ static constexpr bool link_debug_printfs = false;
 /*!
  * Make progress on linking.
  */
+// SYMDUMP support: name of the object currently being linked.
+static const char* g_symdump_obj = "?";
+
 uint32_t link_control::jak1_work() {
   auto old_debug_segment = DebugSegment;
   if (m_keep_debug) {
@@ -151,6 +154,17 @@ uint32_t symlink_v3(Ptr<uint8_t> link, Ptr<uint8_t> data) {
   int32_t sym_offset = sym.cast<u32>() - s7;
   uint32_t sym_addr = sym.cast<u32>().offset;
 
+  // SYMDUMP=<comma-separated names>: print the authoritative slot offset for
+  // these symbols as the linker resolves them. The linker runs in real runtime
+  // context, so this is the only reliable name->slot mapping available (lldb
+  // name lookup is unsound here; see CLAUDE.md).
+  if (const char* want = getenv("SYMDUMP")) {
+    if (strstr(want, sym_name)) {
+      fprintf(stderr, "SYMDUMP obj=%-16s %-28s slot=0x%x s7rel=%d value=0x%x\n",
+              g_symdump_obj, sym_name, sym_addr, sym_offset, *(sym.cast<u32>()));
+    }
+  }
+
   // prepare to read locations of symbol links
   Ptr<uint32_t> offsets = link.cast<uint32_t>() + seek;
   uint32_t offset_count = *offsets;
@@ -179,7 +193,86 @@ uint32_t symlink_v3(Ptr<uint8_t> link, Ptr<uint8_t> data) {
  * Run the linker. For now, all linking is done in two runs.  If this turns out to be too slow,
  * this should be modified to do incremental linking over multiple runs.
  */
+// SYMGUARD: watch a known symbol's name string for in-place corruption.
+// Set SYMGUARD=1. Prints the object being linked when the bytes first change.
+static void symguard_check(const char* when) {
+  if (!getenv("SYMGUARD")) {
+    return;
+  }
+  static char last[32];
+  static bool have = false;
+  static u32 pinned_str = 0;  // pin the ADDRESS: once corrupted, name lookup fails
+  Ptr<String> strp;
+  if (pinned_str) {
+    strp = Ptr<String>(pinned_str);
+  } else {
+    auto sym = jak1::find_symbol_from_c("*default-dead-pool*");
+    if (!sym.offset) {
+      return;
+    }
+    strp = jak1::info(sym)->str;
+    if (!strp.offset) {
+      return;
+    }
+    pinned_str = strp.offset;
+  }
+  const char* d = strp->data();
+  if (!have) {
+    strncpy(last, d, sizeof(last) - 1);
+    last[sizeof(last) - 1] = 0;
+    have = true;
+    fprintf(stderr, "SYMGUARD baseline at %s: str=0x%x %.24s\n", when, strp.offset, d);
+    return;
+  }
+  if (strncmp(last, d, sizeof(last) - 1) != 0) {
+    fprintf(stderr, "SYMGUARD *** CORRUPTED at %s *** (str=0x%x)\n", when, strp.offset);
+    // Dump the raw bytes AROUND the string, including the String header
+    // (type tag at -4, allocated_length at +0, data at +4) so the corrupt
+    // content can be interpreted: ASCII? a GOAL pointer? instruction words?
+    const u8* raw = (const u8*)(g_ee_main_mem + strp.offset) - 16;
+    for (int row = 0; row < 4; row++) {
+      u32 goal_addr = strp.offset - 16 + row * 16;
+      fprintf(stderr, "  SYMGUARD %c[0x%x] ", (row == 1 ? '>' : ' '), goal_addr);
+      for (int i = 0; i < 16; i++) {
+        fprintf(stderr, "%02x ", raw[row * 16 + i]);
+      }
+      fprintf(stderr, " |");
+      for (int i = 0; i < 16; i++) {
+        u8 c = raw[row * 16 + i];
+        fprintf(stderr, "%c", (c >= 32 && c < 127) ? c : '.');
+      }
+      fprintf(stderr, "|\n");
+    }
+    // interpret the 8 clobbered bytes as u32 pairs: GOAL ptr? instruction?
+    const u32* w = (const u32*)((const u8*)(g_ee_main_mem + strp.offset) + 8);
+    fprintf(stderr, "  SYMGUARD clobber words: 0x%08x 0x%08x\n", w[0], w[1]);
+    // The repeating pointer in the clobber pattern names the table's owner.
+    // Read its type word (offset -4) and then that type's name symbol/string.
+    {
+      u32 cand = w[1];
+      if (cand > 0x1000 && cand < 0x8000000) {
+        u32 type_ptr = *(const u32*)(g_ee_main_mem + cand - 4);
+        fprintf(stderr, "  SYMGUARD repeated-ptr 0x%x -> type word 0x%x", cand, type_ptr);
+        if (type_ptr > 0x1000 && type_ptr < 0x8000000) {
+          auto tsym = Ptr<jak1::Type>(type_ptr)->symbol;
+          if (tsym.offset) {
+            auto tstr = jak1::info(tsym)->str;
+            if (tstr.offset) {
+              fprintf(stderr, " type=%.32s", tstr->data());
+            }
+          }
+        }
+        fprintf(stderr, "\n");
+      }
+    }
+    strncpy(last, d, sizeof(last) - 1);
+    last[sizeof(last) - 1] = 0;
+  }
+}
+
 uint32_t link_control::jak1_work_v3() {
+  g_symdump_obj = m_object_name;
+  symguard_check(m_object_name);
   ObjectFileHeader* ofh = m_link_block_ptr.cast<ObjectFileHeader>().c();
   if (m_state == 0) {
     // state 0 <- copying data.

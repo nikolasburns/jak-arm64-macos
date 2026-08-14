@@ -712,13 +712,28 @@ Ptr<Symbol> find_symbol_in_fixed_area(u32 hash, const char* name) {
  * the symbol. If we fail to find it without wrapping, and it's not in the fixed area, return 0.
  */
 Ptr<Symbol> find_symbol_in_area(u32 hash, const char* name, u32 start, u32 end) {
+  const char* symtrace = getenv("SYMTRACE");
+  bool trace = symtrace && strstr(symtrace, name);
   for (u32 i = start; i < end; i += 8) {
     auto sym = Ptr<Symbol>(i);
+
+    if (trace) {
+      const char* sd = "<null-str>";
+      if (info(sym)->str.offset) {
+        sd = info(sym)->str->data();
+      }
+      fprintf(stderr, "  SYMTRACE probe slot=0x%x hash=0x%x want=0x%x strptr=0x%x host=%p str=%.40s\n",
+              i, info(sym)->hash, hash, info(sym)->str.offset,
+              info(sym)->str.offset ? (void*)(g_ee_main_mem + info(sym)->str.offset) : nullptr, sd);
+    }
 
     // note - this may break if any symbols hash to zero!
     if (info(sym)->hash == hash) {
       if (!strcmp(info(sym)->str->data(), name)) {
         return sym;
+      }
+      if (trace) {
+        fprintf(stderr, "  SYMTRACE HASH MATCH BUT STRCMP FAILED at 0x%x\n", i);
       }
     }
 

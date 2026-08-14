@@ -162,6 +162,20 @@ u32 kheapused(Ptr<kheapinfo> heap) {
  * @return        : memory.  0 if we run out of room
  * DONE, PRINT ADDED
  */
+// KMGUARD=<hex goal addr>: report any allocation whose range covers that
+// address, i.e. the allocator handing out memory that is already live.
+static void kmguard_report(const char* who, u32 lo, u32 hi, const char* name, s32 size) {
+  const char* g = getenv("KMGUARD");
+  if (!g) {
+    return;
+  }
+  u32 target = (u32)strtoul(g, nullptr, 0);
+  if (target >= lo && target < hi) {
+    fprintf(stderr, "KMGUARD *** %s returned [0x%x,0x%x) covering 0x%x  name=%s size=%d\n", who, lo,
+            hi, target, name ? name : "(null)", size);
+  }
+}
+
 Ptr<u8> kmalloc(Ptr<kheapinfo> heap, s32 size, u32 flags, char const* name) {
   uint32_t alignment_flag = flags & 0xfff;
 #if defined(__APPLE__) && defined(__aarch64__) && !OG_EXECUTION_MODE_AOT
@@ -268,7 +282,15 @@ Ptr<u8> kmalloc(Ptr<kheapinfo> heap, s32 size, u32 flags, char const* name) {
     // overlap a persistent executable allocation.
     jit_memory::make_writable(Ptr<u8>(memstart).c(), static_cast<size_t>(size));
 #endif
+    // KMREWIND: the bottom bump pointer must never move backwards. If it does,
+    // a later allocation will be handed memory that is still live.
+    if (getenv("KMREWIND") && heap == kglobalheap && memend < heap->current.offset) {
+      fprintf(stderr,
+              "KMREWIND *** global heap current REWOUND: 0x%x -> 0x%x (alloc %s size %d)\n",
+              heap->current.offset, memend, name ? name : "(null)", size);
+    }
     heap->current.offset = memend;
+    kmguard_report("kmalloc/bottom", memstart, memend, name, size);
     if (flags & KMALLOC_MEMSET)
       std::memset(Ptr<u8>(memstart).c(), 0, (size_t)size);
     return Ptr<u8>(memstart);
@@ -306,6 +328,7 @@ Ptr<u8> kmalloc(Ptr<kheapinfo> heap, s32 size, u32 flags, char const* name) {
     jit_memory::make_writable(Ptr<u8>(memstart).c(), static_cast<size_t>(size));
 #endif
     heap->top.offset = memstart;
+    kmguard_report("kmalloc/top", memstart, memstart + size, name, size);
 
     if (flags & KMALLOC_MEMSET)
       std::memset(Ptr<u8>(memstart).c(), 0, (size_t)size);

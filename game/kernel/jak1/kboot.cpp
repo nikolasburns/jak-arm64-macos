@@ -11,6 +11,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <thread>
+#include <vector>
 
 #include "common/common_types.h"
 #include "common/log/log.h"
@@ -113,7 +114,32 @@ void KernelCheckAndDispatch() {
   u64 goal_stack = u64(g_ee_main_mem) + EE_MAIN_MEM_SIZE - 8;
 #endif
 
+  // SYMWATCH=<hex slot offsets, comma separated>: print the value at each slot
+  // every N dispatches. Offsets must come from SYMDUMP (the linker's own
+  // name->slot mapping) — lldb name lookup is unsound here, see CLAUDE.md.
+  std::vector<u32> symwatch;
+  if (const char* w = getenv("SYMWATCH")) {
+    const char* p = w;
+    while (*p) {
+      symwatch.push_back((u32)strtoul(p, nullptr, 0));
+      const char* c = strchr(p, ',');
+      if (!c) {
+        break;
+      }
+      p = c + 1;
+    }
+  }
+  u64 symwatch_tick = 0;
+
   while (MasterExit == RuntimeExitStatus::RUNNING) {
+    if (!symwatch.empty() && (symwatch_tick++ % 120) == 0) {
+      fprintf(stderr, "SYMWATCH tick %llu:", (unsigned long long)symwatch_tick);
+      for (u32 off : symwatch) {
+        fprintf(stderr, " [0x%x]=0x%x", off, *Ptr<u32>(off));
+      }
+      fprintf(stderr, "\n");
+    }
+
     // try to get a message from the listener, and process it if needed
     Ptr<char> new_message = WaitForMessageAndAck();
     if (new_message.offset) {
