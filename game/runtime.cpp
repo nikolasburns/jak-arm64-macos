@@ -85,7 +85,7 @@
 
 u8* g_ee_main_mem = nullptr;
 std::thread::id g_main_thread_id = std::thread::id();
-GameVersion g_game_version = GameVersion::Jak2;
+GameVersion g_game_version = GameVersion::Jak1;
 BackgroundWorker g_background_worker;
 int g_server_port = DECI2_PORT;
 #if OG_EXECUTION_MODE_AOT

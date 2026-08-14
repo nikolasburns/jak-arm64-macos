@@ -71,7 +71,14 @@
 
 (defmacro tc ()
   "Typecheck against the all-types file"
-  `(m "decompiler/config/jak2/all-types.gc")
+  (#cond
+    ((eq? GAME_VERSION 'jak1)
+     `(m "decompiler/config/jak1/all-types.gc")
+     )
+    (#t
+     `(m "decompiler/config/jak2/all-types.gc")
+     )
+    )
   )
 
 (defmacro e ()
@@ -1273,4 +1280,11 @@
 ;; Load Project
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(asm-file "goal_src/jak2/compiler-setup.gc")
+(#cond
+  ((eq? GAME_VERSION 'jak1)
+   (asm-file "goal_src/jak1/compiler-setup.gc")
+   )
+  ((eq? GAME_VERSION 'jak2)
+   (asm-file "goal_src/jak2/compiler-setup.gc")
+   )
+  )

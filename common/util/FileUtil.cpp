@@ -270,12 +270,15 @@ fs::path get_game_output_dir(GameVersion game_version) {
   return get_jak_project_dir() / "out" / output_name;
 }
 
-fs::path get_iso_dir_for_game(GameVersion /*game_version*/) {
+fs::path get_iso_dir_for_game(GameVersion game_version) {
   if (!g_iso_data_directory.empty()) {
     return g_iso_data_directory;
   }
   // Find the location based on the game version
-  std::string expected_subdir = "jak2";
+  std::string expected_subdir = "jak1";
+  if (game_version == GameVersion::Jak2) {
+    expected_subdir = "jak2";
+  }
   const auto temp_dir = get_jak_project_dir() / "iso_data" / expected_subdir;
   if (fs::exists(temp_dir)) {
     g_iso_data_directory = temp_dir;

@@ -3,6 +3,7 @@
 #include "common/util/FileUtil.h"
 #include "common/versions/versions.h"
 
+#include "goalc/build_level/jak1/build_level.h"
 #include "goalc/build_level/jak2/build_level.h"
 
 #include "third-party/CLI11.hpp"
@@ -59,7 +60,16 @@ int main(int argc, char** argv) {
     return 1;
   }
 
-  jak2::run_build_level(input_json, output_file, "jak2/", gen_fr3);
+  switch (game_version) {
+    case GameVersion::Jak1:
+      jak1::run_build_level(input_json, output_file, "jak1/", gen_fr3);
+      break;
+    case GameVersion::Jak2:
+      jak2::run_build_level(input_json, output_file, "jak2/", gen_fr3);
+      break;
+    default:
+      ASSERT_NOT_REACHED_MSG("unsupported game version");
+  }
 
   return 0;
 }
