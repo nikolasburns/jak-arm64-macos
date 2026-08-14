@@ -193,6 +193,13 @@ uint32_t symlink_v3(Ptr<uint8_t> link, Ptr<uint8_t> data) {
  * Run the linker. For now, all linking is done in two runs.  If this turns out to be too slow,
  * this should be modified to do incremental linking over multiple runs.
  */
+// Debugger anchor, deliberately not static and not inlined so a breakpoint can
+// be set on it by name. Called once, at the moment the watched string is known
+// to be valid. Does nothing on its own.
+extern "C" __attribute__((noinline)) void symguard_arm_watch(u32 str_offset) {
+  asm volatile("" : : "r"(str_offset) : "memory");
+}
+
 // SYMGUARD: watch a known symbol's name string for in-place corruption.
 // Set SYMGUARD=1. Prints the object being linked when the bytes first change.
 static void symguard_check(const char* when) {
@@ -222,6 +229,10 @@ static void symguard_check(const char* when) {
     last[sizeof(last) - 1] = 0;
     have = true;
     fprintf(stderr, "SYMGUARD baseline at %s: str=0x%x %.24s\n", when, strp.offset, d);
+    // Anchor for a debugger: the string is valid RIGHT NOW, so this is the
+    // correct moment to arm a hardware watchpoint on its bytes. Breaking on
+    // this symbol avoids having to guess a wall-clock moment to attach.
+    symguard_arm_watch(strp.offset);
     return;
   }
   if (strncmp(last, d, sizeof(last) - 1) != 0) {

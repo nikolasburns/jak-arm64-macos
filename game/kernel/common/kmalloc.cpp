@@ -176,6 +176,21 @@ static void kmguard_report(const char* who, u32 lo, u32 hi, const char* name, s3
   }
 }
 
+// KMBIG=<decimal min size>: report every allocation at least that large, with
+// its full extent. Used to locate large arenas (e.g. *dram-stack*) and decide
+// whether a later small allocation can fall inside one of them.
+static void kmbig_report(const char* who, u32 lo, u32 hi, const char* name, s32 size) {
+  const char* g = getenv("KMBIG");
+  if (!g) {
+    return;
+  }
+  s32 threshold = (s32)strtol(g, nullptr, 0);
+  if (size >= threshold) {
+    fprintf(stderr, "KMBIG %s [0x%x,0x%x) name=%s size=%d\n", who, lo, hi, name ? name : "(null)",
+            size);
+  }
+}
+
 Ptr<u8> kmalloc(Ptr<kheapinfo> heap, s32 size, u32 flags, char const* name) {
   uint32_t alignment_flag = flags & 0xfff;
 #if defined(__APPLE__) && defined(__aarch64__) && !OG_EXECUTION_MODE_AOT
@@ -291,6 +306,7 @@ Ptr<u8> kmalloc(Ptr<kheapinfo> heap, s32 size, u32 flags, char const* name) {
     }
     heap->current.offset = memend;
     kmguard_report("kmalloc/bottom", memstart, memend, name, size);
+    kmbig_report("kmalloc/bottom", memstart, memend, name, size);
     if (flags & KMALLOC_MEMSET)
       std::memset(Ptr<u8>(memstart).c(), 0, (size_t)size);
     return Ptr<u8>(memstart);
@@ -329,6 +345,7 @@ Ptr<u8> kmalloc(Ptr<kheapinfo> heap, s32 size, u32 flags, char const* name) {
 #endif
     heap->top.offset = memstart;
     kmguard_report("kmalloc/top", memstart, memstart + size, name, size);
+    kmbig_report("kmalloc/top", memstart, memstart + size, name, size);
 
     if (flags & KMALLOC_MEMSET)
       std::memset(Ptr<u8>(memstart).c(), 0, (size_t)size);

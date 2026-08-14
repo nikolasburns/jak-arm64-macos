@@ -106,6 +106,14 @@
 
 ;; the main stack for running GOAL code!
 ;; most user code runs using *dram-stack*
+
+;; NOTE (ARM64, session 9): the dram stack grows DOWN and the global heap puts
+;; the symbol NAME STRINGS immediately below it, so a runaway descent overwrites
+;; them -- which is how *default-dead-pool*'s name got clobbered (see PROGRESS).
+;; A 64 kB guard array was TRIED HERE and DISPROVEN as a fix: the descent walked
+;; through the entire guard (frame records found throughout it) and reached the
+;; strings anyway. Do not re-add a guard expecting it to help; the descent is
+;; unbounded, so no fixed slack contains it. Fix the recursion instead.
 (define *dram-stack* (new 'global 'array 'uint8 DPROCESS_STACK_SIZE))
 
 ;; note - this name is a bit confusing. The kernel-dram-stack is not the stack that the kernel runs in.
@@ -182,6 +190,19 @@
   "Set the backup stack size of a thread. This should only be done on the main-thread.
   This should be done immediately after allocating the main-thread.
    Users can do this if they want a larger or smaller backup stack than the default."
+  ;; Many Jak 1 actors intentionally request small backup stacks (128/256/512)
+  ;; that are sized for x86-64 frames. ARM64 generated calls have a larger
+  ;; aligned register-save footprint, so the same GOAL code suspends with a
+  ;; deeper stack. thread-suspend's copy loop is bounded by the LIVE stack
+  ;; usage, not by stack-size -- the (break) overflow check is a debug no-op --
+  ;; so an undersized backup stack lets the copy run off the bottom of the
+  ;; cpu-thread and overwrite whatever precedes the process heap. That is what
+  ;; corrupted the *default-dead-pool* symbol name string during the village1
+  ;; load. Mirrors goal_src/jak2/kernel/gkernel.gc. Keep x86 values unchanged.
+  (#if ARM64_TARGET
+    (when (< stack-size 768)
+      (set! stack-size 768))
+    #f)
   (let ((proc (-> this process)))
     (cond
       ((neq? this (-> proc main-thread))
@@ -206,6 +227,12 @@
   This is a special new method which ignores the allocation symbol.
   The stack-top is for the execution stack.
   The stack-size is for the backup stack (applicable for main thread only)"
+  ;; ARM64 needs a wider backup-stack floor than the historical x86 defaults.
+  ;; See the note in stack-size-set!. Mirrors goal_src/jak2/kernel/gkernel.gc.
+  (#if ARM64_TARGET
+    (when (< stack-size 768)
+      (set! stack-size 768))
+    #f)
   ;; first, let's see if we're doing the main or temp thread
   (let* ((this (cond
                  ((-> parent-process top-thread)
