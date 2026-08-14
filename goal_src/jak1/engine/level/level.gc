@@ -822,13 +822,27 @@
     (mem-usage (-> this bsp) arg0 arg1))
   this)
 
+;; ARM64 function/data objects are larger than the x86-64 objects and need more
+;; room inside each level bank -- the same problem the fork already solved in
+;; jak2 (jak2/engine/level/level.gc: DEBUG_LEVEL_HEAP_MULT is 1.75 on ARM64 vs
+;; 1.1 on x86, a 1.59x uplift). jak1's mirror had missed it, so the largest
+;; levels overran the heap: MIS.DGO reported
+;;   "dgo file header ... has overrun heap ... by 267056 bytes"
+;; while loading Misty Island.
+;; MEASURED (session 11, out/jak1-arm64 vs out/jak1): whole DGOs are only
+;; 1.01-1.13x larger on ARM64 (they are dominated by arch-neutral art/geometry),
+;; but that still adds ~1.25 MB to MIS -- more than the ~1 MB of headroom x86
+;; had at the object that crosses top-base. CODE objects alone are 2.5-3.2x.
+;; 1.75x matches jak2's established ARM64 multiplier and leaves ~5.9 MB of
+;; headroom over the largest jak1 DGO. Cost is LEVEL_COUNT (2) heaps =
+;; 35.6 MB of the 110.7 MB global heap.
 (#cond
   (PC_PORT
-   (defconstant LEVEL_HEAP_SIZE (* 10416 1024)) ;; 10.416K
-   (defconstant LEVEL_HEAP_SIZE_DEBUG (* 11000 1024)))
+   (defconstant LEVEL_HEAP_SIZE (#if ARM64_TARGET (* 18228 1024) (* 10416 1024)))
+   (defconstant LEVEL_HEAP_SIZE_DEBUG (#if ARM64_TARGET (* 19250 1024) (* 11000 1024))))
   (#t
-   (defconstant LEVEL_HEAP_SIZE (* 10416 1024)) ;; 10.416K
-   (defconstant LEVEL_HEAP_SIZE_DEBUG (* 25600 1024)) ;; 25.600K
+   (defconstant LEVEL_HEAP_SIZE (#if ARM64_TARGET (* 18228 1024) (* 10416 1024)))
+   (defconstant LEVEL_HEAP_SIZE_DEBUG (#if ARM64_TARGET (* 44800 1024) (* 25600 1024)))
    ))
 
 (defmethod alloc-levels! ((this level-group) (compact-level-heaps symbol))
