@@ -48,7 +48,10 @@
 ;; enough room. But this strategy saves memory in the end.
 
 ;; the size of the single large "DRAM" execution stack (14 kB increased to 32 kB in PC)
-(defconstant DPROCESS_STACK_SIZE #x8000)
+;; ARM64 codegen spills far more than x86-64 does (16-byte-granular pushes, no
+;; 8-byte SP adjustments), so the execution stack needs considerably more room.
+;; This mirrors goal_src/jak2/kernel/gkernel-h.gc.
+(defconstant DPROCESS_STACK_SIZE (#if ARM64_TARGET #x800000 #x8000))
 
 ;; the size of the execution stack, if not using the big DRAM stack.
 ;; OpenGOAL NOTE: 7kB -> 24kB

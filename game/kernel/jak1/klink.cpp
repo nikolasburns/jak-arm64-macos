@@ -1,5 +1,6 @@
 #include "klink.h"
 
+#include "common/jit_memory.h"
 #include "common/log/log.h"
 #include "common/symbols.h"
 
@@ -514,7 +515,42 @@ uint32_t link_control::jak1_work_v2() {
  * Complete linking. This will execute the top-level code for v3 object files, if requested.
  */
 void link_control::jak1_finish(bool jump_from_c_to_goal) {
-  CacheFlush(m_code_start.c(), m_code_size);
+  ObjectFileHeader* ofh_pre = m_link_block_ptr.cast<ObjectFileHeader>().c();
+  if (ofh_pre->object_file_version == 3) {
+    // Version 3 moves each code segment into the GOAL heap, so m_code_start/m_code_size do not
+    // describe the final executable ranges.  On Apple Silicon the JIT pages must be flipped
+    // from writable to executable or the first call into linked GOAL code faults.
+    for (u32 segment = 0; segment < ofh_pre->segment_count; ++segment) {
+      const auto& code = ofh_pre->code_infos[segment];
+      if (code.offset && code.size) {
+        size_t executable_size = code.size;
+#if defined(__APPLE__) && defined(__aarch64__)
+        const u32 link_metadata = ofh_pre->link_infos[segment].size;
+        if (link_metadata & LINK_ARM64_EXECUTABLE_SIZE_FLAG) {
+          executable_size = link_metadata & ~LINK_ARM64_EXECUTABLE_SIZE_FLAG;
+        }
+#endif
+        if (executable_size) {
+#if OG_EXECUTION_MODE_AOT
+          throw std::runtime_error("AOT object contains an executable code segment");
+#else
+          jit_memory::make_executable(Ptr<u8>(code.offset).c(), executable_size);
+#endif
+        }
+      }
+    }
+  } else {
+#if defined(__APPLE__) && defined(__aarch64__) && !OG_EXECUTION_MODE_AOT
+    // Legacy v2/v4 objects are relocated by GOAL after they are copied into
+    // the heap. Keep their code range writable until that relocation method
+    // has finished; x86 does not require this transition.
+    if (m_code_size) {
+      jit_memory::make_writable(m_code_start.c(), m_code_size);
+    }
+#else
+    CacheFlush(m_code_start.c(), m_code_size);
+#endif
+  }
   auto old_debug_segment = DebugSegment;
   if (m_keep_debug) {
     // note - this probably doesn't work because DebugSegment isn't *debug-segment*.
@@ -541,7 +577,12 @@ void link_control::jak1_finish(bool jump_from_c_to_goal) {
     // execute top level!
     if (m_entry.offset && (m_flags & LINK_FLAG_EXECUTE)) {
       if (jump_from_c_to_goal) {
+#if defined(__aarch64__)
+        // AArch64 faults (EXC_ARM_SP_ALIGN) unless SP is 16-byte aligned.
+        u64 goal_stack = u64(g_ee_main_mem) + EE_MAIN_MEM_SIZE - 16;
+#else
         u64 goal_stack = u64(g_ee_main_mem) + EE_MAIN_MEM_SIZE - 8;
+#endif
         call_goal_on_stack(m_entry.cast<Function>(), goal_stack, s7.offset, g_ee_main_mem);
       } else {
         call_goal(m_entry.cast<Function>(), 0, 0, 0, s7.offset, g_ee_main_mem);
