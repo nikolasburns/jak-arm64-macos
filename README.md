@@ -114,6 +114,45 @@ Extraction runs levels **in parallel and out of order** — an interrupted run
 leaves an arbitrary subset with no error. If assets later appear missing, check
 that all level `.fr3` files are present before assuming a code problem.
 
+### Optional: HD texture packs
+
+Upstream OpenGOAL supports replacing textures at extraction time, and that path
+works unchanged on ARM64. Two community ESRGAN upscale packs cover the games in
+full:
+
+| Game | Pack | Source |
+|---|---|---|
+| Jak 1 | *Jak and Daxter Reloaded in HD* | [NexusMods mod 10](https://www.nexusmods.com/jakanddaxtertheprecursorlegacy/mods/10) |
+| Jak 2 | *OpenGOAL Jak 2 HD Texture Pack* (MIT) | [github.com/Aloqas/OpenGOAL-Jak2-HD-Texture-Pack](https://github.com/Aloqas/OpenGOAL-Jak2-HD-Texture-Pack) |
+
+**This repository ships no textures** — install a pack yourself if you want one.
+Drop its contents into `custom_assets/<game>/texture_replacements/<tpage>/…`
+(both packs already use that layout) and re-run the extractor. Replacement is
+keyed on `<tpage_name>/<texture_name>.png`, with an `_all/` directory as a
+fallback for flat packs. `custom_assets/*/texture_replacements/` is gitignored.
+
+Notes from installing both:
+
+- **Expect a much bigger `fr3/` tree.** Jak 1 grew 201 MB → 2.1 GB (~10×);
+  levels individually range from 4× to 20×. Budget disk accordingly.
+- **The texture pass is single-threaded.** `extract_level.cpp` forces
+  `num_workers = 1` whenever replacements are active, so this run cannot be
+  parallelised — but it is still fast (~30 s for Jak 1 on an M4 Pro).
+- **Skip animated textures, sky domes and eye textures** if a pack includes
+  them: those are composited or cycled at runtime and break when upscaled. Both
+  packs above already exclude the animated set, so no manual pruning is needed.
+- **Strip editor residue** (`.png~`, `.svg`, `desktop.ini`) before extracting.
+- Remember the copy step below — the decompiler writes to `out/<game>/fr3`
+  while the runtime reads `out/<game>-arm64/fr3`.
+
+```sh
+cp out/jak1/fr3/*.fr3 out/jak1-arm64/fr3/
+```
+
+`fr3` files are architecture-neutral, so copying them between trees is safe.
+**`iso/` is not** — it contains compiled code and must never be copied across
+architectures.
+
 ## Compile the game
 
 **The `--target-arch arm64` flag is required.** Without it the compiler silently
