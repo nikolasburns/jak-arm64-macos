@@ -1,7 +1,7 @@
 layout (location = 0) in vec3 position_in;
 layout (location = 1) in vec3 tex_coord_in;
 layout (location = 2) in vec3 rgba_base;
-layout (location = 3) in int time_of_day_index;
+layout (location = 3) in uint time_of_day_index;
 
 uniform vec4 hvdf_offset;
 uniform mat4 camera;
@@ -50,7 +50,7 @@ void main() {
   // start with the vertex color (only rgb, VIF filled in the 255.)
   fragment_color =  vec4(rgba_base, 1);
   // get the time of day multiplier
-  vec4 tod_color = texelFetch(tex_T10, ivec2(time_of_day_index, 0), 0);
+  vec4 tod_color = texelFetch(tex_T10, ivec2(int(time_of_day_index), 0), 0);
   // combine
   fragment_color *= tod_color * 4.0;
 

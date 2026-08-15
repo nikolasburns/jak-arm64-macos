@@ -1,6 +1,6 @@
 layout (location = 0) in vec3 position_in;
 layout (location = 1) in vec3 tex_coord_in;
-layout (location = 2) in int time_of_day_index;
+layout (location = 2) in uvec2 time_of_day_index;
 layout (location = 3) in vec3 normal;
 layout (location = 4) in vec4 proto_tint;
 

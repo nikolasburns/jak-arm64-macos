@@ -1,5 +1,5 @@
 layout (location = 0) in float position_in;
-layout (location = 1) in int time_of_day_index;
+layout (location = 1) in uint time_of_day_index;
 layout (location = 2) in ivec2 uv;
 layout (location = 3) in int vi;
 
@@ -37,6 +37,6 @@ void main() {
   gl_Position = transformed;
 
   // time of day lookup
-  fragment_color = texelFetch(tex_T10, ivec2(time_of_day_index, 0), 0);
+  fragment_color = texelFetch(tex_T10, ivec2(int(time_of_day_index), 0), 0);
   fragment_color.a = 1.0;
 }

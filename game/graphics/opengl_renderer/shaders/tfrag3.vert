@@ -1,6 +1,6 @@
 layout (location = 0) in vec3 position_in;
 layout (location = 1) in vec3 tex_coord_in;
-layout (location = 2) in int time_of_day_index;
+layout (location = 2) in uvec2 time_of_day_index;
 
 uniform vec4 hvdf_offset;
 uniform vec4 cam_trans;
@@ -48,7 +48,7 @@ void main() {
   gl_Position = transformed;
 
   // time of day lookup
-  fragment_color = texelFetch(tex_T10, ivec2(time_of_day_index, 0), 0);
+  fragment_color = texelFetch(tex_T10, ivec2(int(time_of_day_index.x), 0), 0);
   // color adjustment
   fragment_color *= 2.0;
   fragment_color.a *= 2.0;
