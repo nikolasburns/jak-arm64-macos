@@ -45,46 +45,16 @@ intact — `git log --follow` on any kernel file shows the whole chain.
 
 ---
 
-## What was actually wrong (and why it may help your port)
+## Engineering notes
 
-Nearly every bug found here belonged to one class, which we came to call
-**"x86 semantics in ARM64 clothing"**: GOAL assembly-form code that is correct
-only because of an *x86 instruction's side effects*, compiled unchanged for
-ARM64.
+Two documents carry the detail of what the port actually involved:
 
-Seven instances, all in code that Jak 2 had already ported correctly and Jak 1's
-mirror had not:
-
-| # | Site | The x86 assumption |
-|---|---|---|
-| 1 | C→GOAL bridges | saved-register *role names* |
-| 2 | `gkernel` context switches | same role names |
-| 3 | catch/throw saved set | same role names |
-| 4 | `cpu-thread` backup stacks | x86-sized frames |
-| 5 | `deactivate` + `enter-state` | `ret` consumes a pushed address |
-| 6 | `enter-state` trampoline | `.push` reaches x30 only from the `rax` role |
-| 7 | level-heap sizing | heap sized to x86 code density |
-
-The two that cost the most: **ARM64 has seven allocator-saved GPRs where GOAL's
-x86 vocabulary names only five**, and **`ret`/`br` branch to X30 and ignore the
-stack**, so the x86 "push the return address, then return" idiom silently does
-nothing.
-
-There is now an encoding-level tripwire for the whole family in
-[`test/goalc/test_arm64_continuation_handoff.cpp`](test/goalc/test_arm64_continuation_handoff.cpp).
-It drives the compiler's IR directly, asserts on emitted bytes, has a table row
-per real call site, and is mutation-verified — reverting the fix makes it fail
-with the offending instruction word in the message.
-
-**Two documents carry the detail:**
-
-- **[PORTING-NOTES.md](PORTING-NOTES.md)** — the engineering reference. The bug
-  class, ARM64 traps, code-density findings, techniques for debugging a JIT'd
-  Lisp runtime, and a section on **adding Jak 3**.
+- **[PORTING-NOTES.md](PORTING-NOTES.md)** — the engineering reference. The
+  recurring bug class, ARM64 traps, code-density findings, techniques for
+  debugging a JIT'd Lisp runtime, and a section on **adding Jak 3**.
 - **[CASE-STUDIES.md](CASE-STUDIES.md)** — two multi-session bug hunts written up
-  in full, *including the five falsified hypotheses and the misreadings*. The
-  wrong turns are the point: they show which techniques pay off and in what
-  order.
+  in full, *including the falsified hypotheses and the misreadings*. The wrong
+  turns are the point: they show which techniques pay off and in what order.
 
 ---
 
@@ -224,17 +194,6 @@ Bundles are snapshots. After any `(mi)` or asset change, re-run the script to
 refresh them.
 
 ---
-
-## Known issues
-
-- **Jak 2** boots to title and attract; a full playthrough has not been
-  validated. Expect the same class of bugs Jak 1 hit, in Jak 2-specific code.
-- **Jak 1 gameplay validation is in progress.** Later levels are expected to work
-  but have not all been reached.
-- One benign upstream oddity, so it is not mistaken for a port defect: Jak 1
-  requests `sage-intro-sequence-b`, which shipped on **no US disc** and appears in
-  no object table. The loader's handling is a designed non-fatal path — the
-  warnings during the sage's intro are normal and every x86 player sees them too.
 
 ## Contributing
 
