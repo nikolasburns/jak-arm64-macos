@@ -32,6 +32,21 @@ inline void enable_primitive_restart_u32() {
 }
 
 /*!
+ * Set the polygon rasterization mode (GL_FILL / GL_LINE) for GL_FRONT_AND_BACK.
+ *
+ * glPolygonMode is desktop-GL only: GLES 3.0 has no such entry point, and every
+ * caller here is a debug wireframe toggle that brackets a draw with LINE then
+ * restores FILL. ANGLE exposes the same functionality through
+ * GL_ANGLE_polygon_mode as glPolygonModeANGLE, resolved dynamically because our
+ * glad loader is generated for desktop GL and knows nothing about it.
+ *
+ * If the extension is absent the call is dropped rather than faked: the only
+ * consequence is that debug wireframe draws render filled. Nothing on the normal
+ * render path calls this.
+ */
+void set_polygon_mode(GLenum mode);
+
+/*!
  * This is a wrapper around a framebuffer and texture to make it easier to render to a texture.
  */
 class FramebufferTexturePair {

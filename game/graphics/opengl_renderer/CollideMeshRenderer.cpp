@@ -4,6 +4,7 @@
 
 #include "game/graphics/gfx.h"
 #include "game/graphics/opengl_renderer/background/background_common.h"
+#include "game/graphics/opengl_renderer/opengl_utils.h"
 
 const static std::vector<float> material_colors_jak1 = {
     1.0f,  0.7f,  1.0f,   // 0, stone
@@ -327,9 +328,9 @@ void CollideMeshRenderer::render(SharedRenderState* render_state, ScopedProfiler
       glUniform1i(glGetUniformLocation(shader, "wireframe"), 1);
       glDisable(GL_BLEND);
       glDepthMask(GL_FALSE);
-      glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+      set_polygon_mode(GL_LINE);
       glDrawArrays(GL_TRIANGLES, 0, lev->level->collision.vertices.size());
-      glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
+      set_polygon_mode(GL_FILL);
       glEnable(GL_BLEND);
       glDepthMask(GL_TRUE);
     }

@@ -4,6 +4,7 @@
 #include "common/log/log.h"
 #include "common/util/Assert.h"
 
+#include "game/graphics/opengl_renderer/opengl_utils.h"
 #include "game/graphics/pipelines/opengl.h"
 
 #include "fmt/format.h"
@@ -310,9 +311,9 @@ void DirectRenderer::flush_pending(SharedRenderState* render_state, ScopedProfil
   if (m_debug_state.wireframe) {
     render_state->shaders[ShaderId::DEBUG_RED].activate();
     glDisable(GL_BLEND);
-    glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+    set_polygon_mode(GL_LINE);
     glDrawArrays(GL_TRIANGLES, 0, m_prim_buffer.vert_count);
-    glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
+    set_polygon_mode(GL_FILL);
     m_blend_state_needs_gl_update = true;
     m_prim_gl_state_needs_gl_update = true;
     draw_count++;

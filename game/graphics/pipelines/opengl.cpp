@@ -308,14 +308,41 @@ static std::shared_ptr<GfxDisplay> gl_make_display(int width,
         return NULL;
       }
     }
+    if (gfx_backend_is_angle()) {
+      // Flat-qualified varyings take their value from the PROVOKING vertex, and
+      // the two APIs disagree on which that is: desktop GL defaults to the LAST
+      // vertex of the primitive, GLES 3.0 is fixed to the FIRST. The shaders are
+      // written for desktop GL, so on ANGLE the flat-shaded renderers would pick
+      // up a different vertex's colour without this.
+      //
+      // GL_ANGLE_provoking_vertex exists for exactly this; resolve it
+      // dynamically, since our glad loader is desktop-GL generated.
+      using ProvokingVertexANGLE = void(APIENTRY*)(GLenum);
+      auto provoking_vertex_angle =
+          reinterpret_cast<ProvokingVertexANGLE>(SDL_GL_GetProcAddress("glProvokingVertexANGLE"));
+      if (provoking_vertex_angle) {
+        constexpr GLenum kFirstVertexConventionANGLE = 0x8E4D;  // GL_FIRST_VERTEX_CONVENTION_ANGLE
+        provoking_vertex_angle(kFirstVertexConventionANGLE);
+        lg::info("gfx backend ANGLE: provoking vertex set to FIRST_VERTEX_CONVENTION");
+      } else {
+        // Not fatal, but flat-shaded colours will be wrong. Named visual checks
+        // for this: direct2, sprite_3d, sprite_distort, depth_cue.
+        lg::warn(
+            "gfx backend ANGLE: glProvokingVertexANGLE unavailable; flat-shaded colours may be "
+            "taken from the wrong vertex");
+      }
+    }
+
     {
       auto p = scoped_prof("startup::sdl::gfx_data_init");
       g_gfx_data = std::make_unique<GraphicsData>(game_version);
     }
     gl_inited = true;
     const char* gl_version = (const char*)glGetString(GL_VERSION);
-    lg::info("OpenGL initialized - v{}.{} | Renderer: {}", GLVersion.major, GLVersion.minor,
-             gl_version);
+    const char* gl_renderer = (const char*)glGetString(GL_RENDERER);
+    lg::info("OpenGL initialized - v{}.{} | Version: {} | Renderer: {}", GLVersion.major,
+             GLVersion.minor, gl_version ? gl_version : "(null)",
+             gl_renderer ? gl_renderer : "(null)");
   }
 
   {

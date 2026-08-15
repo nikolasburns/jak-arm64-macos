@@ -495,9 +495,9 @@ void Shadow2::draw_buffers(SharedRenderState* render_state,
     if (m_debug_draw_volume) {
       glDisable(GL_BLEND);
       glUniform4f(m_ogl.uniforms.color, 0., 0.0, 0., 0.5);
-      glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+      set_polygon_mode(GL_LINE);
       glDrawElements(GL_TRIANGLE_STRIP, (m_front_index_buffer_used - 6), GL_UNSIGNED_INT, nullptr);
-      glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
+      set_polygon_mode(GL_FILL);
       glEnable(GL_BLEND);
       prof.add_draw_call();
       prof.add_tri(m_front_index_buffer_used / 3);
@@ -520,9 +520,9 @@ void Shadow2::draw_buffers(SharedRenderState* render_state,
     if (m_debug_draw_volume) {
       glDisable(GL_BLEND);
       glUniform4f(m_ogl.uniforms.color, 0., 0.0, 0., 0.5);
-      glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+      set_polygon_mode(GL_LINE);
       glDrawElements(GL_TRIANGLE_STRIP, (m_back_index_buffer_used - 0), GL_UNSIGNED_INT, nullptr);
-      glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
+      set_polygon_mode(GL_FILL);
       glEnable(GL_BLEND);
       prof.add_draw_call();
       prof.add_tri(m_back_index_buffer_used / 3);

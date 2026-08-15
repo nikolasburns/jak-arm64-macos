@@ -3,9 +3,40 @@
 #include <array>
 #include <cstdio>
 
+#include "common/log/log.h"
 #include "common/util/Assert.h"
 
 #include "game/graphics/opengl_renderer/BucketRenderer.h"
+
+#include <SDL3/SDL_video.h>
+
+void set_polygon_mode(GLenum mode) {
+  if (!gfx_backend_is_angle()) {
+    glPolygonMode(GL_FRONT_AND_BACK, mode);
+    return;
+  }
+
+  // GL_ANGLE_polygon_mode. Resolved once, on first use, so this costs a single
+  // branch afterwards. A context is current by the time any renderer draws.
+  using PolygonModeANGLE = void(APIENTRY*)(GLenum, GLenum);
+  static PolygonModeANGLE s_polygon_mode_angle = nullptr;
+  static bool s_resolved = false;
+  if (!s_resolved) {
+    s_resolved = true;
+    s_polygon_mode_angle =
+        reinterpret_cast<PolygonModeANGLE>(SDL_GL_GetProcAddress("glPolygonModeANGLE"));
+    if (s_polygon_mode_angle) {
+      lg::info("gfx backend ANGLE: glPolygonModeANGLE available (debug wireframe supported)");
+    } else {
+      lg::warn(
+          "gfx backend ANGLE: glPolygonModeANGLE unavailable; debug wireframe draws will render "
+          "filled");
+    }
+  }
+  if (s_polygon_mode_angle) {
+    s_polygon_mode_angle(GL_FRONT_AND_BACK, mode);
+  }
+}
 
 FramebufferTexturePair::FramebufferTexturePair(int w, int h, u64 texture_format, int num_levels)
     : m_w(w), m_h(h) {
