@@ -1,5 +1,7 @@
 #include "SkyBlendCPU.h"
 
+#include <algorithm>
+
 #include "common/util/os.h"
 #include "common/util/simd_util.h"
 
@@ -49,6 +51,16 @@ void blend_sky_initial_fast(u8 intensity, u8* out, const u8* in, u32 size) {
       _mm_storel_epi64((__m128i*)(out + (i * 8)), result);
     }
   }
+#else
+  // ARM64: the SSE paths above are excluded, so this scalar version is what
+  // actually runs. It must exist — without it the function is a no-op that
+  // never writes `out`, and the sky texture stays at its cleared value (black).
+  // Mirrors the SSE semantics exactly: multiply by intensity, shift right 7,
+  // saturate to u8.
+  for (u32 i = 0; i < size; i++) {
+    u32 val = (static_cast<u32>(in[i]) * intensity) >> 7;
+    out[i] = static_cast<u8>(std::min<u32>(val, 255));
+  }
 #endif
 }
 
@@ -87,6 +99,16 @@ void blend_sky_fast(u8 intensity, u8* out, const u8* in, u32 size) {
       out_val = _mm_adds_epu8(out_val, result);
       _mm_storel_epi64((__m128i*)(out + (i * 8)), out_val);
     }
+  }
+#else
+  // ARM64 scalar equivalent — see the note in blend_sky_initial_fast. This is
+  // the accumulating variant: clamp the scaled sample to 255 (the SSE code's
+  // _mm_min_epi16 before packing), then add to the existing value with u8
+  // saturation (_mm_adds_epu8).
+  for (u32 i = 0; i < size; i++) {
+    u32 val = (static_cast<u32>(in[i]) * intensity) >> 7;
+    val = std::min<u32>(val, 255);
+    out[i] = static_cast<u8>(std::min<u32>(static_cast<u32>(out[i]) + val, 255));
   }
 #endif
 }
