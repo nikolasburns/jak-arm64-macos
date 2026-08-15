@@ -16,8 +16,8 @@ SkyBlendGPU::SkyBlendGPU() {
   for (int i = 0; i < 2; i++) {
     glBindFramebuffer(GL_FRAMEBUFFER, m_framebuffers[i]);
     glBindTexture(GL_TEXTURE_2D, m_textures[i]);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, m_sizes[i], m_sizes[i], 0, GL_RGBA,
-                 GL_UNSIGNED_INT_8_8_8_8_REV, 0);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, m_sizes[i], m_sizes[i], 0, GL_RGBA,
+                 GL_UNSIGNED_BYTE, 0);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
     glFramebufferTexture(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, m_textures[i], 0);

@@ -256,8 +256,8 @@ void Hfrag::load_hfrag_level(const std::string& load_name,
   glActiveTexture(GL_TEXTURE10);
   glGenTextures(1, &lev->time_of_day_texture);
   glBindTexture(GL_TEXTURE_2D, lev->time_of_day_texture);
-  glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, TIME_OF_DAY_COLOR_COUNT, 1, 0, GL_RGBA,
-               GL_UNSIGNED_INT_8_8_8_8, nullptr);
+  glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, TIME_OF_DAY_COLOR_COUNT, 1, 0, GL_RGBA,
+               GL_UNSIGNED_BYTE, nullptr);
   glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
   glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
   glBindVertexArray(0);
@@ -390,7 +390,7 @@ void Hfrag::render_hfrag_level(Hfrag::HfragLevel* lev,
   interp_time_of_day(pc_data.camera.itimes, lev->hfrag->time_of_day_colors, m_color_result.data());
   glActiveTexture(GL_TEXTURE10);
   glBindTexture(GL_TEXTURE_2D, lev->time_of_day_texture);
-  glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, lev->num_colors, 1, GL_RGBA, GL_UNSIGNED_INT_8_8_8_8_REV,
+  glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, lev->num_colors, 1, GL_RGBA, GL_UNSIGNED_BYTE,
                   m_color_result.data());
 
   // initialize data

@@ -24,7 +24,7 @@ void Sprite3::opengl_setup_distort() {
   glGenTextures(1, &m_distort_ogl.fbo_texture);
   glBindTexture(GL_TEXTURE_2D, m_distort_ogl.fbo_texture);
 
-  glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, m_distort_ogl.fbo_width, m_distort_ogl.fbo_height, 0,
+  glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB8, m_distort_ogl.fbo_width, m_distort_ogl.fbo_height, 0,
                GL_RGB, GL_UNSIGNED_BYTE, NULL);
 
   glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
@@ -632,7 +632,7 @@ void Sprite3::distort_setup_framebuffer_dims(SharedRenderState* render_state) {
 
     glBindTexture(GL_TEXTURE_2D, m_distort_ogl.fbo_texture);
 
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, m_distort_ogl.fbo_width, m_distort_ogl.fbo_height, 0,
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB8, m_distort_ogl.fbo_width, m_distort_ogl.fbo_height, 0,
                  GL_RGB, GL_UNSIGNED_BYTE, NULL);
 
     glBindTexture(GL_TEXTURE_2D, 0);

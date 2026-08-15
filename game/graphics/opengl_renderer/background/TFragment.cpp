@@ -338,8 +338,8 @@ void TFragment::update_load(const std::vector<tfrag3::TFragmentTreeKind>& tree_k
 
         glGenTextures(1, &tree_cache.time_of_day_texture);
         glBindTexture(GL_TEXTURE_2D, tree_cache.time_of_day_texture);
-        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, TIME_OF_DAY_COLOR_COUNT, 1, 0, GL_RGBA,
-                     GL_UNSIGNED_INT_8_8_8_8, nullptr);
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, TIME_OF_DAY_COLOR_COUNT, 1, 0, GL_RGBA,
+                     GL_UNSIGNED_BYTE, nullptr);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
         glBindVertexArray(0);
@@ -425,7 +425,7 @@ void TFragment::render_tree(int geom,
   glActiveTexture(GL_TEXTURE10);
   glBindTexture(GL_TEXTURE_2D, tree.time_of_day_texture);
   glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, tree.colors->color_count, 1, GL_RGBA,
-                  GL_UNSIGNED_INT_8_8_8_8_REV, m_color_result.data());
+                  GL_UNSIGNED_BYTE, m_color_result.data());
 
   first_tfrag_draw_setup(settings.camera, render_state, ShaderId::TFRAG3);
 
