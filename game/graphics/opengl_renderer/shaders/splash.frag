@@ -1,4 +1,3 @@
-#version 410 core
 in vec2 frag_uv;
 out vec4 out_color;
 uniform sampler2D splash_tex;

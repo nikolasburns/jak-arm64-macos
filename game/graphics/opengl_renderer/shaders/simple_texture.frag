@@ -1,5 +1,3 @@
-#version 410 core
-
 out vec4 out_color;
 in vec2 tex;
 uniform vec4 color;

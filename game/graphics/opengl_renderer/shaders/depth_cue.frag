@@ -1,5 +1,3 @@
-#version 410 core
-
 flat in vec4 fragment_color;
 in vec2 tex_coord;
 
