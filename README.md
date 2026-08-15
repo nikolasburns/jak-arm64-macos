@@ -162,10 +162,11 @@ app that no longer needs this checkout:
 ./scripts/package-app.sh jak2        # -> /Applications/Jak 2.app
 ```
 
-Pass a second argument to install somewhere else (`./scripts/package-app.sh jak1
-~/Applications`). If `/Applications` is not writable on your machine, the script
-says so up front rather than failing partway through a multi-gigabyte copy; re-run
-it with `sudo` or choose another directory.
+Pass a second argument to install somewhere else, e.g.
+`./scripts/package-app.sh jak1 ~/Applications`. If `/Applications` is not
+writable on your machine, the script says so up front rather than failing
+partway through a multi-gigabyte copy; re-run it with `sudo` or choose another
+directory.
 
 The bundle embeds the compiled game data from `out/<game>-arm64`, the OpenGL
 shaders, fonts and assets, and every non-system dylib — so it keeps working if
@@ -179,16 +180,19 @@ Gatekeeper refusal:
 
 ```sh
 xattr -dr com.apple.quarantine "/Applications/Jak 1.app"
-``` Saves and settings stay in
-`~/Library/Application Support/OpenGOAL/<game>/`, shared with the plain `gk`
-binary, and the runtime's log and `imgui.ini` are symlinked there too so that
-nothing is ever written inside the `.app` (which would otherwise invalidate its
-code signature on first launch).
+```
 
-Expect **~3.7 GB** for Jak 1 and **~5.5 GB** for Jak 2 — the compiled assets
-dominate, and a texture pack pushes Jak 1 higher still. Bundles are ad-hoc signed
-(`codesign -s -`) for local use; they are **not** notarized and are not intended
-for distribution, since the embedded assets are derived from your own disc.
+Saves and settings stay in `~/Library/Application Support/OpenGOAL/<game>/`,
+shared with the plain `gk` binary, and the runtime's log and `imgui.ini` are
+symlinked there too so that nothing is ever written inside the `.app` (which
+would otherwise invalidate its code signature on first launch).
+
+Expect a multi-gigabyte bundle — the compiled assets dominate, and an HD texture
+pack adds several gigabytes more (with both packs installed, roughly 3.7 GB for
+Jak 1 and 9.6 GB for Jak 2). The bundled dylibs are a rounding error at ~18 MB.
+Bundles are ad-hoc signed (`codesign -s -`) for local use; they are **not**
+notarized and are not intended for distribution, since the embedded assets are
+derived from your own disc.
 
 Bundles are snapshots. After any `(mi)` or asset change, re-run the script to
 refresh them.
