@@ -1,11 +1,11 @@
 # Porting OpenGOAL to ARM64: engineering notes
 
-Practical notes from porting Jak 1 to native ARM64 macOS, on top of the ARM64
-backend that [DiMiTriFrog/jak2-macos-arm64](https://github.com/DiMiTriFrog/jak2-macos-arm64)
+Practical notes from porting Jak 1 and Jak 3 to native ARM64 macOS, on top of
+the ARM64 backend that [DiMiTriFrog/jak2-macos-arm64](https://github.com/DiMiTriFrog/jak2-macos-arm64)
 built for Jak 2.
 
-**Who this is for:** anyone extending OpenGOAL to a new architecture, or adding
-Jak 3 support to this backend. Most of what follows is not Jak-1-specific — it is
+**Who this is for:** anyone extending OpenGOAL to a new architecture, or porting
+another game onto this backend. Little of what follows is game-specific — it is
 about what breaks when GOAL's x86-shaped assumptions meet a RISC target, and
 which debugging techniques actually pay off against a JIT'd Lisp runtime.
 
@@ -114,6 +114,45 @@ A subtlety worth knowing: a DGO larger than the level heap is *normal* and
 happens on x86 too. The runtime check compares **one object's end** against
 `top-base`, not the whole file — so the failure is size-dependent and surfaces at
 whichever level first crosses the line, not at the first oversized DGO.
+
+### A fix can have a size cost, and the budget it lands on may not be yours
+
+The same class bites a second time, one level down, and it is easier to miss
+because the change that causes it is *correct*.
+
+ARM64 frames are larger, so the port raised the minimum backup stack to 768
+bytes — a measured corruption threshold, not a guess: below it, `thread-suspend`'s
+copy loop (bounded by *live* stack usage, not by `stack-size`) runs off the
+bottom of the `cpu-thread` and overwrites whatever precedes it.
+
+But a process's main `cpu-thread` is allocated **out of that process's own
+heap**. So the floor is paid in process-heap bytes, and the per-actor
+`:heap-size` values inherited from upstream were sized for the x86 request:
+
+| | cpu-thread | backup stack | used | free of 896 |
+|---|---|---|---|---|
+| x86 | 128 | **128** as requested | 256 | 640 |
+| ARM64 | 128 | **768** clamped | **896** | **0** |
+
+Jak 1's `launcher` declares `:heap-size #x400` — 1024 bytes, 896 usable. The
+clamped thread consumed **exactly all of it**, so the first allocation in its
+`init-from-entity!` (a 192-byte `collide-shape`) failed at birth and the game
+took a SIGBUS. It is shared engine code, so every launcher in the game — beach,
+swamp, jungle — died the same way.
+
+Two things generalise:
+
+- **When you raise a floor, find whose budget pays for it.** The floor was right;
+  nothing had been adjusted to afford it.
+- **Charge it at the allocation site, not per consumer.** The fix adds the
+  surcharge once in `get-process`, so every actor gets exactly the room the clamp
+  will take. Editing the per-actor table instead would have meant an unbounded
+  audit and a diverged upstream file per actor.
+
+The exposure was bounded by measurement, not assumption: of 20 entity-table
+actors only two declare a heap that tight, and the second never allocates.
+Jak 2 and Jak 3 carry the same clamp but their smallest heap is `#x4000` — 16×
+larger — so they were never at risk.
 
 ---
 
@@ -264,25 +303,43 @@ lane order. These produce plausible-looking output and only show up in play.
 
 ---
 
-## 7. If you are adding Jak 3
+## 7. Adding a third game: what actually happened with Jak 3
 
-The ARM64 backend is game-agnostic; nearly all work here was Jak-1-specific
-*mirroring*. Expect:
+This section used to be a prediction. Jak 3 is now ported and playable, so it is
+a record instead — including where the prediction was wrong.
 
-1. **The seven bug-class instances above, again.** Jak 3's `goal_src` will have
-   its own copies of the kernel asm-funcs. Run the §1 sweeps first — they are
-   minutes of work and would have saved several sessions here.
-2. **Heap and buffer constants** (§2). Jak 3's levels are larger than Jak 2's;
-   audit anything sized against code output before debugging load failures.
-3. **`jak3/` was deliberately not restored** in this fork — there are no Jak 3
-   sources here. Start from upstream's Jak 3 tree, then apply the ARM64 deltas
-   this repo makes to `jak1/`, using `git log --follow` on the kernel files as
-   the checklist.
-4. **Use both existing games as controls.** Nearly every fix here was found by
-   asking "what does the *working* game do differently?" A three-way diff needs
-   a third corner; with Jak 1 and Jak 2 both working, Jak 3 has two.
+**What held.** The ARM64 backend really is game-agnostic: Jak 3 compiled all
+3505 targets to ARM64 on the first attempt, with zero compiler errors, straight
+after grafting upstream's tree. Every graft blocker was a known pattern from the
+Jak 1 campaign — version guards, CMake wiring, runtime dispatch, an empty
+mips2c callback slot, and two deleted build tools.
 
----
+**What the prediction got right.** The §1 bug-class instances did recur, in
+Jak 3's own copies of the kernel asm-funcs, and the sweeps found them quickly.
+Heap constants did need auditing (§2) — Jak 3's level heap needed a larger
+multiplier than either predecessor, and the reason was not level size but a
+borrow loop that moves `top-base` **downward after loading completes**, which no
+allocator check can catch because no allocation is in flight when the boundary
+moves.
+
+**What it got wrong.** "Use both existing games as controls" is good advice that
+fails in one specific and important case. Two of the hardest bugs here were in
+code paths that **Jak 1 and Jak 2 never execute**:
+
+- the IOP system clock (`GetSystemTimeLow`), where an out-of-range
+  `double`→`u32` conversion is UB that x86 wraps and ARM64 *saturates* — the
+  clock froze after 116.5 s and deadlocked the game;
+- the ARM64 function pool in `kmalloc`, reachable only when a game passes
+  `"function"` as an allocation name, which only Jak 1 does.
+
+In both cases the other games booting cleanly was worth nothing. **A control
+only controls for code it actually runs** — check that the path is shared before
+treating a green game as evidence.
+
+**The one thing worth doing first.** Grep for raw x86 opcodes before
+structure-walking anything. A single `grep -rn "0xc3" game/kernel/jak3/` found
+the last boot blocker — hand-planted x86 `ret` bytes in a kernel stub with no
+ARM64 branch — after a full session of reading call graphs had not.
 
 ## Appendix: verified environment
 

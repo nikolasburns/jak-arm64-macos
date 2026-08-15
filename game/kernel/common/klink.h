@@ -96,20 +96,20 @@ struct link_control {
                   uint32_t flags);
 
   // was originally "work"
-  uint32_t jak1_work();
+  LinkStatus jak1_work();
   LinkStatus jak2_work();
-  uint32_t jak3_work();
+  LinkStatus jak3_work();
   uint32_t jakx_work();
 
-  uint32_t jak1_work_v3();
-  uint32_t jak1_work_v2();
+  LinkStatus jak1_work_v3();
+  LinkStatus jak1_work_v2();
 
   LinkStatus jak2_work_v3();
   LinkStatus jak2_work_v2();
 
-  uint32_t jak3_work_v2_v4();
-  uint32_t jak3_work_v5();
-  uint32_t jak3_work_opengoal();
+  LinkStatus jak3_work_v2_v4();
+  LinkStatus jak3_work_v5();
+  LinkStatus jak3_work_opengoal();
   uint32_t jakx_work_v2_v4();
   uint32_t jakx_work_v5();
   uint32_t jakx_work_opengoal();

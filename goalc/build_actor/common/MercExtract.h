@@ -4,6 +4,7 @@
 
 #include "goalc/build_actor/jak1/build_actor.h"
 #include "goalc/build_actor/jak2/build_actor.h"
+#include "goalc/build_actor/jak3/build_actor.h"
 
 void extract(const std::string& name,
              gltf_util::MercExtractData& out,
@@ -24,6 +25,10 @@ std::vector<jak1::CollideMesh> gen_collide_mesh_from_model_jak1(
     const std::vector<gltf_util::NodeWithTransform>& all_nodes,
     int joint_idx);
 std::vector<jak2::CollideMesh> gen_collide_mesh_from_model_jak2(
+    const tinygltf::Model& model,
+    const std::vector<gltf_util::NodeWithTransform>& all_nodes,
+    int joint_idx);
+std::vector<jak3::CollideMesh> gen_collide_mesh_from_model_jak3(
     const tinygltf::Model& model,
     const std::vector<gltf_util::NodeWithTransform>& all_nodes,
     int joint_idx);

@@ -200,8 +200,8 @@
   ;; corrupted the *default-dead-pool* symbol name string during the village1
   ;; load. Mirrors goal_src/jak2/kernel/gkernel.gc. Keep x86 values unchanged.
   (#if ARM64_TARGET
-    (when (< stack-size 768)
-      (set! stack-size 768))
+    (when (< stack-size ARM64_MIN_BACKUP_STACK)
+      (set! stack-size ARM64_MIN_BACKUP_STACK))
     #f)
   (let ((proc (-> this process)))
     (cond
@@ -230,8 +230,8 @@
   ;; ARM64 needs a wider backup-stack floor than the historical x86 defaults.
   ;; See the note in stack-size-set!. Mirrors goal_src/jak2/kernel/gkernel.gc.
   (#if ARM64_TARGET
-    (when (< stack-size 768)
-      (set! stack-size 768))
+    (when (< stack-size ARM64_MIN_BACKUP_STACK)
+      (set! stack-size ARM64_MIN_BACKUP_STACK))
     #f)
   ;; first, let's see if we're doing the main or temp thread
   (let* ((this (cond
@@ -1191,8 +1191,37 @@
 ;; warn when this happens.
 (define-extern *vis-boot* basic)
 
+;; ARM64 charges the backup-stack floor to the process heap.
+;;
+;; A process's main cpu-thread is allocated OUT OF the process heap ((method new
+;; cpu-thread), which does `heap-cur += align16(cpu-thread size) + stack-size`).
+;; On ARM64 both that method and `stack-size-set!` clamp stack-size up to
+;; ARM64_MIN_BACKUP_STACK because ARM64 frames are larger and thread-suspend's
+;; copy loop is bounded by LIVE stack usage, not by stack-size -- see the note
+;; on stack-size-set!. That floor is correct and must NOT be lowered; it fixes a
+;; real memory-corruption bug.
+;;
+;; But the floor was added without giving the heaps the room to pay for it. An
+;; actor asking for a 128-byte backup stack silently consumes 768, a +640 tax
+;; that upstream's `:heap-size` values in entity-table.gc were never sized for.
+;; `launcher` (:heap-size #x400 -> 896 usable) is consumed EXACTLY: cpu-thread
+;; 128 + clamped stack 768 = 896, leaving 0 free, so the first allocation in its
+;; init-from-entity! (a 192-byte collide-shape) fails at birth and the game dies.
+;; Measured on the beach AND jungle launchers; both crash identically.
+;;
+;; Charge it here, at the one place a process heap is sized, rather than editing
+;; per-actor sizes in an upstream-identical table: every actor then gets exactly
+;; the extra room the clamp will take from it.
+;;
+;; NOTE the parameter name is misleading (it is upstream's): in get-process,
+;; `stack-size` is the PROCESS HEAP size -- entity-table's `:heap-size` -- not a
+;; backup-stack size. The surcharge is a flat grant of the worst-case extra the
+;; clamp can consume, because the actor's real backup-stack request is not known
+;; here (it is made later, inside init-from-entity!).
 (defmethod get-process ((this dead-pool-heap) (type-to-make type) (stack-size int))
   "Allocate a process"
+  (#when ARM64_TARGET
+    (set! stack-size (+ stack-size ARM64_PROCESS_HEAP_STACK_SURCHARGE)))
   ;; get a record for the new process
   (let ((rec (-> this dead-list next))
         ;; will eventually hold our new process

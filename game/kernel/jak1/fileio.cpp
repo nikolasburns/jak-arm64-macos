@@ -3,12 +3,26 @@
 #include <cstdio>
 #include <cstring>
 
+#include <string>
+
+#include "common/util/FileUtil.h"
 #include "common/versions/versions.h"
 
 #include "game/kernel/common/fileio.h"
 #include "game/kernel/common/kmalloc.h"
 
 namespace jak1 {
+
+namespace {
+/*!
+ * Path to a compiled .go in the game's output directory. Must go through get_game_output_dir so
+ * ARM64 builds read out/jak1-arm64/obj rather than the x86 tree.
+ */
+std::string obj_file_path(const char* name) {
+  return (file_util::get_game_output_dir(GameVersion::Jak1) / "obj" / (std::string(name) + ".go"))
+      .string();
+}
+}  // namespace
 
 /*!
  * Turn file name into file's path.
@@ -92,12 +106,12 @@ char* MakeFileName(int type, const char* name, int new_string) {
     // GOAL object file, but containing data instead of code.
     // likely packed by a tool that isn't the GOAL compiler.
     // sprintf(buf, "%sdata/%s.go", prefix, name);
-    sprintf(buf, "%sout/jak1/obj/%s.go", prefix, name);
+    kstrcpy(buf, obj_file_path(name).c_str());
   } else if (type == TX_PAGE_FILE_TYPE) {
     // Texture Page
     // part of level files, so it has a version number.
     // sprintf(buf, "%sdata/texture-page%d/%s.go", prefix, TX_PAGE_VERSION, name);
-    sprintf(buf, "%sout/jak1/obj/%s.go", prefix, name);
+    kstrcpy(buf, obj_file_path(name).c_str());
   } else if (type == JA_FILE_TYPE) {
     // Art JA (joint animation? no idea)
     // part of level files, so it has a version number

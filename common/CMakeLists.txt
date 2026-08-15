@@ -28,6 +28,23 @@ endfunction()
 
 write_revision_h()
 
+# write_revision_h() above runs at CONFIGURE time, so the sha it bakes goes
+# stale as soon as you commit: every binary built afterwards keeps reporting the
+# sha from the last `cmake` configure. That made `Compiled Version:` in a log
+# useless for identifying a binary, and during session 25 it nearly caused a
+# valid crash reproduction to be dismissed as "you ran an old build".
+#
+# Re-run the same generation at BUILD time. The script rewrites revision.h only
+# when the contents actually change, so an unchanged HEAD does not trigger a
+# rebuild of every translation unit that includes it.
+add_custom_target(revision_h ALL
+    COMMAND ${CMAKE_COMMAND}
+            -DSRC_DIR=${CMAKE_SOURCE_DIR}
+            -DOUT_FILE=${CMAKE_CURRENT_SOURCE_DIR}/versions/revision.h
+            -P ${CMAKE_SOURCE_DIR}/cmake/WriteRevision.cmake
+    COMMENT "Checking git revision"
+    VERBATIM)
+
 add_library(common
         aot/AotExecution.cpp
         aot/AotDataTemplate.cpp
@@ -89,6 +106,7 @@ add_library(common
         util/FileUtil.cpp
         util/font/dbs/font_db_jak1.cpp
         util/font/dbs/font_db_jak2.cpp
+        util/font/dbs/font_db_jak3.cpp
         util/font/font_utils_korean.cpp
         util/font/font_utils.cpp
         util/FrameLimiter.cpp
@@ -107,6 +125,9 @@ add_library(common
         )
 
 target_link_libraries(common fmt lzokay replxx libzstd_static tree-sitter sqlite3 libtinyfiledialogs tiny_gltf)
+
+# revision.h must be refreshed before anything that includes it is compiled.
+add_dependencies(common revision_h)
 
 if(WIN32)
     target_link_libraries(common wsock32 ws2_32 windowsapp)

@@ -62,3 +62,74 @@ deec637839dcd5edec947fe62b254e87b0973632:third-party/curl/tests/stunnel.pem:priv
 f2cf95438fe3a83158c0a69145504734d2ecce5e:docs/gh-pages-proj/src/views/Home.vue:generic-api-key:157
 f64c235762e2b2781e9cf8ca4c82ea3b57657a89:docs/gh-pages-proj/src/views/Home.vue:generic-api-key:120
 f64c235762e2b2781e9cf8ca4c82ea3b57657a89:docs/js/chunk-461a09f2.js:generic-api-key:1
+
+# ---------------------------------------------------------------------------
+# Added 2026-08-14 (session 14). SAME 59 known-benign findings as the block
+# above -- verified identical on (file, rule, line), 55/55 distinct locations,
+# zero new. Only the COMMIT SHA differs: gitleaks fingerprints are
+# <commit>:<file>:<rule>:<line>, the pre-push hook scans --log-opts="--all"
+# (which includes upstream remote refs), and upstream RE-VENDORED curl 8.21 in
+# 5d5e35fb9b (2026-07-27). The same third-party blobs therefore reappeared
+# under new commits that the original list could not name.
+# All are third-party/ (39) or generated docs/ (20); ZERO in first-party code.
+# curl localhost test certs + doc examples, sqlite, imgui, Vue ':key=' attrs.
+# ---------------------------------------------------------------------------
+026c7245a283456a796e3a0d50b31f620e64b6cb:docs/js/chunk-55aa138e.cf8dfc43.js:generic-api-key:1
+0816a1bf253c0200477ac8d313a17ed694cb158d:docs/js/chunk-461a09f2.js:generic-api-key:1
+10934f67461c876c959638415ed788e5d5748c6d:third-party/sqlite3/sqlite3ext.h:generic-api-key:411
+10934f67461c876c959638415ed788e5d5748c6d:third-party/sqlite3/sqlite3ext.h:generic-api-key:567
+10934f67461c876c959638415ed788e5d5748c6d:third-party/sqlite3/sqlite3ext.h:generic-api-key:659
+13c0814ac9a0038ce193e0089a88935b5e5aca73:third-party/imgui/imgui.cpp:generic-api-key:4134
+1aab98b3354fb84ebd8f202164a068965f4132fe:docs/js/chunk-55aa138e.801cd6f5.js:generic-api-key:1
+1f6438e517ac590b6745ba1e40256ad415c82941:third-party/imgui/imgui.cpp:generic-api-key:4134
+372b6a8746ceb2f274d771dcd3089a329bfa9f6b:docs/js/chunk-55aa138e.20c4d222.js:generic-api-key:1
+3d7228ec77e6a70ff642e9eba0c40e1da3447d3c:docs/js/chunk-461a09f2.js:generic-api-key:1
+41888aac8f005dab690befae9068e79e618c1168:docs/js/chunk-461a09f2.js:generic-api-key:1
+4bb1cbf304e18e71bd1ee2b23d1783f43ac7efbf:docs/js/chunk-55aa138e.383b6658.js:generic-api-key:1
+599f8f7e26111ddb39a35b72fafd757dd4de103c:docs/js/chunk-55aa138e.976821ec.js:generic-api-key:1
+5d5e35fb9be0d7854febd1f22a45d403209fb966:third-party/curl/docs/MANUAL.md:curl-auth-user:182
+5d5e35fb9be0d7854febd1f22a45d403209fb966:third-party/curl/docs/MANUAL.md:curl-auth-user:884
+5d5e35fb9be0d7854febd1f22a45d403209fb966:third-party/curl/docs/examples/usercertinmem.c:private-key:67
+7117a512c756f299fd01a632d32a79c1d0af62b9:docs/gh-pages-proj/src/views/Home.vue:generic-api-key:157
+7aa5322a0e4077a2c7ff95ca4a63109eed2929c8:docs/js/chunk-1ecea497.d806155b.js:generic-api-key:1
+7b1572883cdfb74aa28bb544dad744739dbc24b9:docs/js/chunk-55aa138e.8411b5d1.js:generic-api-key:1
+8b3b96761d4ca26737f5562dfff5989ba4fff928:third-party/curl/docs/MANUAL.md:curl-auth-user:173
+8b3b96761d4ca26737f5562dfff5989ba4fff928:third-party/curl/docs/MANUAL.md:curl-auth-user:874
+8b3b96761d4ca26737f5562dfff5989ba4fff928:third-party/curl/docs/examples/usercertinmem.c:private-key:99
+8b3b96761d4ca26737f5562dfff5989ba4fff928:third-party/curl/tests/certs/EdelCurlRoot-ca.key:private-key:1
+8b3b96761d4ca26737f5562dfff5989ba4fff928:third-party/curl/tests/certs/Server-localhost-firstSAN-sv.key:private-key:1
+8b3b96761d4ca26737f5562dfff5989ba4fff928:third-party/curl/tests/certs/Server-localhost-firstSAN-sv.pem:private-key:40
+8b3b96761d4ca26737f5562dfff5989ba4fff928:third-party/curl/tests/certs/Server-localhost-lastSAN-sv.key:private-key:1
+8b3b96761d4ca26737f5562dfff5989ba4fff928:third-party/curl/tests/certs/Server-localhost-lastSAN-sv.pem:private-key:39
+8b3b96761d4ca26737f5562dfff5989ba4fff928:third-party/curl/tests/certs/Server-localhost-sv.key:private-key:1
+8b3b96761d4ca26737f5562dfff5989ba4fff928:third-party/curl/tests/certs/Server-localhost-sv.pem:private-key:39
+8b3b96761d4ca26737f5562dfff5989ba4fff928:third-party/curl/tests/certs/Server-localhost.nn-sv.key:private-key:1
+8b3b96761d4ca26737f5562dfff5989ba4fff928:third-party/curl/tests/certs/Server-localhost.nn-sv.pem:private-key:39
+8b3b96761d4ca26737f5562dfff5989ba4fff928:third-party/curl/tests/certs/Server-localhost0h-sv.key:private-key:1
+8b3b96761d4ca26737f5562dfff5989ba4fff928:third-party/curl/tests/certs/Server-localhost0h-sv.pem:private-key:40
+8b3b96761d4ca26737f5562dfff5989ba4fff928:third-party/curl/tests/certs/stunnel-sv.key:private-key:1
+8b3b96761d4ca26737f5562dfff5989ba4fff928:third-party/curl/tests/certs/stunnel-sv.pem:private-key:39
+8b3b96761d4ca26737f5562dfff5989ba4fff928:third-party/curl/tests/data/test1284:curl-auth-user:61
+8b3b96761d4ca26737f5562dfff5989ba4fff928:third-party/curl/tests/data/test1285:curl-auth-user:61
+8b3b96761d4ca26737f5562dfff5989ba4fff928:third-party/curl/tests/data/test1286:curl-auth-user:72
+8b3b96761d4ca26737f5562dfff5989ba4fff928:third-party/curl/tests/data/test2067:curl-auth-user:61
+8b3b96761d4ca26737f5562dfff5989ba4fff928:third-party/curl/tests/data/test2068:curl-auth-user:61
+8b3b96761d4ca26737f5562dfff5989ba4fff928:third-party/curl/tests/data/test2069:curl-auth-user:61
+8b3b96761d4ca26737f5562dfff5989ba4fff928:third-party/curl/tests/data/test823:generic-api-key:17
+8b3b96761d4ca26737f5562dfff5989ba4fff928:third-party/curl/tests/data/test869:generic-api-key:19
+8b3b96761d4ca26737f5562dfff5989ba4fff928:third-party/curl/tests/stunnel.pem:private-key:39
+90438523cd354b86f745a9a68cfb4d4c8f3272a8:docs/gh-pages-proj/src/views/Home.vue:generic-api-key:120
+90438523cd354b86f745a9a68cfb4d4c8f3272a8:docs/js/chunk-461a09f2.js:generic-api-key:1
+911ac07da4a7561b7a7f7703441e112a0172487e:docs/js/chunk-55aa138e.dbdb85fb.js:generic-api-key:1
+b11a45d83634ce94b71cdd2c66822a002827a3b8:docs/js/chunk-55aa138e.90edc604.js:generic-api-key:1
+b84a04a14c0a4ee8db11d3da0a134689c780f9cb:docs/js/chunk-55aa138e.1dce5edb.js:generic-api-key:1
+bdaf088d4b8823b8924475fe19ecdb609eb37417:third-party/SDL/test/nacl/manifest.json:generic-api-key:16
+bde49ea079bbb7d3f88af243639db7489d1a2679:third-party/discord-rpc/documentation/hard-mode.md:generic-api-key:67
+bf83f2442d9edfa405a4a71a0d3f1a2f2a683976:third-party/SQLiteCpp/sqlite3/sqlite3.c:generic-api-key:129957
+bf83f2442d9edfa405a4a71a0d3f1a2f2a683976:third-party/SQLiteCpp/sqlite3/sqlite3.c:generic-api-key:130113
+bf83f2442d9edfa405a4a71a0d3f1a2f2a683976:third-party/SQLiteCpp/sqlite3/sqlite3.c:generic-api-key:130205
+bf83f2442d9edfa405a4a71a0d3f1a2f2a683976:third-party/SQLiteCpp/sqlite3/sqlite3.c:generic-api-key:233436
+c35ab4a2233c0752fb22f808a37dda93a710f612:docs/js/chunk-55aa138e.4646adf0.js:generic-api-key:1
+e018951d38ace0d12d49a56ea63c7978459d0eea:docs/js/chunk-55aa138e.87601729.js:generic-api-key:1
+f757f1b9acfbefeb67d2619a89ba5eec5e9ac2cc:docs/js/chunk-55aa138e.5205e388.js:generic-api-key:1
+f76c87d7fe2a3d9bb91dd96a3d4db1149c18cce1:docs/js/chunk-55aa138e.8c28d094.js:generic-api-key:1

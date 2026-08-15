@@ -60,6 +60,30 @@
 ;; default size of stack to backup for a process
 (defconstant PROCESS_STACK_SAVE_SIZE 256)
 
+;; ARM64 backup-stack floor. ARM64 frames are larger than x86-64's, and
+;; thread-suspend's copy loop is bounded by LIVE stack usage rather than by
+;; stack-size (the overflow (break) is a debug no-op), so a backup stack sized
+;; for x86 lets the copy run off the bottom of the cpu-thread and overwrite
+;; whatever precedes the process heap. Enforced by both (method new cpu-thread)
+;; and stack-size-set!. This value is a MEASURED corruption threshold -- do not
+;; lower it. jak2 ships the same floor.
+(defconstant ARM64_MIN_BACKUP_STACK 768)
+
+;; The main cpu-thread is allocated out of the PROCESS HEAP, so the floor above
+;; is paid for in process-heap bytes: an actor requesting a 128-byte backup
+;; stack consumes ARM64_MIN_BACKUP_STACK instead. Upstream's per-actor
+;; `:heap-size` values (entity-table.gc) were sized for the x86 request and do
+;; not cover that. `launcher` (:heap-size #x400 -> 896 usable) is consumed
+;; exactly -- cpu-thread 128 + clamped stack 768 = 896, zero free -- so its
+;; first allocation fails at birth.
+;;
+;; get-process adds this to every process heap so the clamp is paid for at the
+;; single site where a heap is sized, instead of editing an upstream-identical
+;; table per actor. Sized as the worst case: the largest overshoot the clamp can
+;; impose is ARM64_MIN_BACKUP_STACK (an actor requesting ~0). Actors that
+;; already request >= the floor simply get unused slack.
+(defconstant ARM64_PROCESS_HEAP_STACK_SURCHARGE ARM64_MIN_BACKUP_STACK)
+
 ;; the size of the shared heap used by dynamically sized processes
 (#if PC_BIG_MEMORY
   (defconstant PROCESS_HEAP_MULT 3) ;; 3x actors

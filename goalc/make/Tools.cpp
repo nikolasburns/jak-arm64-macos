@@ -7,6 +7,7 @@
 #include "goalc/build_actor/jak1/build_actor.h"
 #include "goalc/build_level/jak1/build_level.h"
 #include "goalc/build_level/jak2/build_level.h"
+#include "goalc/build_level/jak3/build_level.h"
 #include "goalc/compiler/Compiler.h"
 #include "goalc/data_compiler/dir_tpages.h"
 #include "goalc/data_compiler/game_count.h"
@@ -288,6 +289,27 @@ bool BuildLevel2Tool::run(const ToolInput& task, const PathMap& path_map) {
                                gen_fr3);
 }
 
+BuildLevel3Tool::BuildLevel3Tool() : Tool("build-level3") {}
+
+bool BuildLevel3Tool::needs_run(const ToolInput& task, const PathMap& path_map) {
+  if (task.input.size() > 3) {
+    throw std::runtime_error(fmt::format("Invalid amount of inputs to {} tool", name()));
+  }
+  auto deps = get_build_level_deps(task.input.at(0));
+  auto rerun = task.input.at(1) == "#t";
+  std::vector in = {task.input.at(0)};
+  return rerun || Tool::needs_run({in, deps, task.output, task.arg}, path_map);
+}
+
+bool BuildLevel3Tool::run(const ToolInput& task, const PathMap& path_map) {
+  if (task.input.size() > 3) {
+    throw std::runtime_error(fmt::format("Invalid amount of inputs to {} tool", name()));
+  }
+  auto gen_fr3 = task.input.at(2) == "#t";
+  return jak3::run_build_level(task.input.at(0), task.output.at(0), path_map.output_prefix,
+                               gen_fr3);
+}
+
 BuildActorTool::BuildActorTool() : Tool("build-actor") {}
 
 bool BuildActorTool::needs_run(const ToolInput& task, const PathMap& path_map) {
@@ -385,4 +407,53 @@ bool BuildActor2Tool::run(const ToolInput& task, const PathMap& path_map) {
     params.joint_channel = std::stoi(task.input.at(7));
   }
   return jak2::run_build_actor(task.input.at(0), task.output.at(0), params);
+}
+
+BuildActor3Tool::BuildActor3Tool() : Tool("build-actor3") {}
+
+bool BuildActor3Tool::needs_run(const ToolInput& task, const PathMap& path_map) {
+  if (task.input.size() > 8) {
+    throw std::runtime_error(fmt::format("Invalid amount of inputs to {} tool", name()));
+  }
+  auto rerun = task.input.at(2) == "#t";
+  std::vector deps{task.input.at(0)};
+  return rerun || Tool::needs_run({deps, deps, task.output, task.arg}, path_map);
+}
+
+bool BuildActor3Tool::run(const ToolInput& task, const PathMap& path_map) {
+  (void)path_map;
+  if (task.input.size() > 8) {
+    throw std::runtime_error(fmt::format("Invalid amount of inputs to {} tool", name()));
+  }
+  jak3::BuildActorParams3 params;
+  params.gen_collide_mesh = task.input.at(1) == "#t";
+  if (task.input.at(3) == "#f") {
+    params.texture_bucket = -1;
+  } else {
+    try {
+      params.texture_bucket = static_cast<s8>(std::stoi(task.input.at(3)));
+    } catch (std::invalid_argument&) {
+      throw std::runtime_error("[build-actor3] texture-bucket must be #f or a valid integer.");
+    }
+  }
+  params.framerate = std::stof(task.input.at(4));
+  if (task.input.at(5) != "#f") {
+    params.master_art_group = task.input.at(5);
+  }
+  auto master_ag_list = m_reader.read_from_string(task.input.at(6));
+  if (!master_ag_list.as_pair()->cdr.is_empty_list()) {
+    std::map<std::string, int> master_ag_map;
+    goos::for_each_in_list(master_ag_list.as_pair()->cdr.as_pair()->car,
+                           [&](const goos::Object& o) {
+                             auto map = o.as_pair();
+                             auto ja = std::string(map->car.as_symbol().name_ptr);
+                             auto idx = map->cdr.as_pair()->car.as_int();
+                             master_ag_map.insert({ja, idx});
+                           });
+    params.master_ag_map = master_ag_map;
+  }
+  if (task.input.at(7) != "6") {
+    params.joint_channel = std::stoi(task.input.at(7));
+  }
+  return jak3::run_build_actor(task.input.at(0), task.output.at(0), params);
 }

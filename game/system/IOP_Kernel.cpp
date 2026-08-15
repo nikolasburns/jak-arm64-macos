@@ -44,9 +44,47 @@ IOP_Kernel::IOP_Kernel() {
 ** -----------------------------------------------------------------------------
 */
 
+/*!
+ * Convert elapsed microseconds to 36.864 MHz IOP ticks, wrapping mod 2^32.
+ *
+ * This models the PS2 IOP's free-running hardware counter, which is a 32-bit register that
+ * WRAPS. Its consumers depend on that: game/overlord/jak3/spustreams.cpp compares timestamps
+ * with modular subtraction (`(u32)(now - then) < delay`), which is only correct against a
+ * counter that wraps the way the hardware one does.
+ *
+ * The arithmetic MUST stay in the integer domain. This previously read
+ *
+ *     return delta_time.count() * 36.864;    // int64 * double -> double -> implicit u32
+ *
+ * which converts a double to u32. Once the product exceeds u32's range that conversion is
+ * UNDEFINED BEHAVIOUR, and our two target architectures disagree about what it does:
+ *
+ *     x86-64  cvttsd2si  wraps      -> accidentally harmless; the bug was invisible on x86.
+ *     ARM64   fcvtzu     SATURATES  -> every value >= 2^32 becomes 0xFFFFFFFF, permanently.
+ *
+ * 2^32 ticks / 36.864 MHz is only 116.5 SECONDS of runtime. Past that, the clock froze at
+ * 0xFFFFFFFF on ARM64; `(u32)(now - then)` was then always 0, so BlockUntilVoiceSafe
+ * (spustreams.cpp) spun forever without yielding, the IOP coroutine never returned to the
+ * scheduler, the sound RPC never completed, and the game deadlocked. A jak3 playtest hung at
+ * 119 s -- see PROGRESS.md, session 20.
+ *
+ * 36.864 == 4608/125 exactly, so the integer form below is not an approximation: it is the
+ * same value with the UB removed, and it wraps identically on every architecture.
+ *
+ * NOTE TO A FUTURE READER: the wraparound is CORRECT AND REQUIRED -- it is the hardware
+ * semantic the callers are written against, not an overflow bug. Do not "fix" it by widening
+ * the return type, clamping the result, or reintroducing floating point. It is pinned by
+ * TargetArch.IopSystemClockWrapsInsteadOfSaturating.
+ */
+u32 iop_micros_to_ticks(s64 micros) {
+  // Cast to u64 first so the multiply and the truncation both wrap mod 2^64 / 2^32 rather
+  // than relying on signed-overflow behaviour.
+  return static_cast<u32>((static_cast<u64>(micros) * 4608ull) / 125ull);
+}
+
 u32 IOP_Kernel::GetSystemTimeLow() {
   auto delta_time = time_point_cast<microseconds>(steady_clock::now()) - m_start_time;
-  return delta_time.count() * 36.864;
+  return iop_micros_to_ticks(delta_time.count());
 }
 
 /*!

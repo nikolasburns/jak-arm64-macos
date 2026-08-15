@@ -5,6 +5,7 @@ set -euo pipefail
 #
 #   scripts/package-app.sh jak1 [output_dir]
 #   scripts/package-app.sh jak2 [output_dir]
+#   scripts/package-app.sh jak3 [output_dir]
 #
 # The bundle embeds the compiled game data from out/<game>-arm64, so it runs
 # with no dependency on this checkout. That data is derived from the user's own
@@ -15,7 +16,7 @@ set -euo pipefail
 
 usage() {
   cat >&2 <<USAGE
-usage: $0 {jak1|jak2} [output_dir] [--no-bundle-deps]
+usage: $0 {jak1|jak2|jak3} [output_dir] [--no-bundle-deps]
 
   output_dir          where to write the .app (default: /Applications)
   --no-bundle-deps    skip dylib packaging. Faster, but the bundle then runs
@@ -38,7 +39,7 @@ for arg in "$@"; do
     --no-bundle-deps) bundle_deps=0 ;;
     -h|--help)        usage ;;
     -*)               echo "error: unknown option ${arg}" >&2; usage ;;
-    jak1|jak2)        game="${arg}" ;;
+    jak1|jak2|jak3)   game="${arg}" ;;
     *)                output_dir="${arg}" ;;
   esac
 done
@@ -50,6 +51,7 @@ project_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 case "${game}" in
   jak1) app_name="Jak 1";     bundle_id="dev.nboily.jak1" ;;
   jak2) app_name="Jak 2";     bundle_id="dev.nboily.jak2" ;;
+  jak3) app_name="Jak 3";     bundle_id="dev.nboily.jak3" ;;
 esac
 
 app="${output_dir}/${app_name}.app"
@@ -106,6 +108,22 @@ read_rpaths() {
   otool -l "$1" | awk '/LC_RPATH/{c=1;next} c&&/path /{sub(/^.*path /,"");sub(/ \(offset.*$/,"");print;c=0}'
 }
 
+# Every real LC_RPATH seen on an ORIGINAL binary, in first-seen order. This is
+# the dyld search path for the whole dependency graph, and it must be collected
+# BEFORE normalise_rpaths() strips the build-tree entries off the copy --
+# otherwise a nested dependency has nothing left to resolve against.
+rpath_search_list=""
+
+record_rpaths() {
+  local bin="$1" rp
+  while IFS= read -r rp; do
+    [[ -z "${rp}" ]] && continue
+    [[ "${rp}" == @loader_path/* || "${rp}" == @executable_path/* ]] && continue
+    [[ ";${rpath_search_list};" == *";${rp};"* ]] && continue
+    rpath_search_list="${rpath_search_list}${rp};"
+  done < <(read_rpaths "${bin}")
+}
+
 normalise_rpaths() {
   local bin="$1" rp
   while IFS= read -r rp; do
@@ -129,9 +147,63 @@ retarget() {
   }
 }
 
+# Resolve an @rpath dependency the way dyld does: search the binary's OWN
+# LC_RPATH entries, in order, and take the first hit.
+#
+# This used to be `find "${project_root}/build" -name "${name}" -print -quit`,
+# which returns whatever copy the filesystem walk reaches first and ignores
+# rpath order entirely. A leftover nested build tree (build/Release/bin, from a
+# different CMake preset) held a MONTHS-OLD libcommon.dylib, and the bundles
+# shipped it instead of build/common/libcommon.dylib. The stale copy still had
+# the pre-Jak1 font bank assert, so opening the in-game Display menu -- which
+# calls get_font_bank_from_game_version() to encode each monitor's name --
+# aborted the game. gk itself was current, so every check against gk looked
+# clean and the bug read as a packaging mystery.
+#
+# Two properties matter and neither is optional:
+#   1. rpath ORDER decides, so the bundle gets what dyld would have loaded.
+#   2. Duplicates outside the winning rpath are reported, not silently ignored.
+resolve_rpath_dep() {
+  local bin="$1" name="$2" rp resolved="" first=""
+  # Search the accumulated rpath list, in order. Using the recorded list rather
+  # than the binary's current LC_RPATHs matters because a dylib already copied
+  # into Frameworks has had its build-tree rpaths stripped by normalise_rpaths.
+  local rest="${rpath_search_list}"
+  while [[ -n "${rest}" ]]; do
+    rp="${rest%%;*}"
+    rest="${rest#*;}"
+    [[ -z "${rp}" ]] && continue
+    if [[ -f "${rp}/${name}" ]]; then
+      resolved="${rp}/${name}"
+      break
+    fi
+  done
+
+  if [[ -z "${resolved}" ]]; then
+    # Fall back to a build-tree search, but make ambiguity fatal rather than
+    # arbitrary: if several copies exist we cannot know which dyld meant.
+    local -a hits=()
+    while IFS= read -r first; do
+      [[ -n "${first}" ]] && hits+=("${first}")
+    done < <(find "${project_root}/build" -name "${name}" -type f 2>/dev/null | sort)
+    if [[ ${#hits[@]} -gt 1 ]]; then
+      echo "error: ${name} is ambiguous -- ${#hits[@]} copies under build/ and none on" >&2
+      echo "       an LC_RPATH of ${bin}:" >&2
+      printf '         %s\n' "${hits[@]}" >&2
+      echo "       Remove the stale build tree(s) or rebuild, then re-run." >&2
+      exit 3
+    fi
+    resolved="${hits[0]:-}"
+  fi
+  printf '%s' "${resolved}"
+}
+
 bundle_binary() {
   local bin="$1" dep name src
   codesign --remove-signature "${bin}" 2>/dev/null || true
+  # Record before normalising: normalise_rpaths deletes the build-tree entries,
+  # and nested dependencies still need them to resolve.
+  record_rpaths "${bin}"
   normalise_rpaths "${bin}"
   while IFS= read -r dep; do
     [[ -z "${dep}" ]] && continue
@@ -151,16 +223,20 @@ bundle_binary() {
     # Resolve the real file. @rpath deps come from the build tree; absolute
     # deps (Homebrew: openssl, zstd, nghttp2) are taken from where they point.
     if [[ "${dep}" == @rpath/* ]]; then
-      src="$(find "${project_root}/build" -name "${name}" -print -quit 2>/dev/null || true)"
+      src="$(resolve_rpath_dep "${bin}" "${name}")"
     elif [[ -f "${dep}" ]]; then
       src="${dep}"
     else
-      src="$(find "${project_root}/build" -name "${name}" -print -quit 2>/dev/null || true)"
+      src="$(resolve_rpath_dep "${bin}" "${name}")"
     fi
     if [[ -z "${src}" || ! -f "${src}" ]]; then
       echo "error: cannot resolve dependency ${dep} of ${bin}" >&2
       exit 3
     fi
+
+    # The ORIGINAL carries the build-tree rpaths its own dependencies need;
+    # the copy is about to lose them to normalise_rpaths.
+    record_rpaths "${src}"
 
     cp -L -f "${src}" "${frameworks_dir}/${name}"
     chmod u+w "${frameworks_dir}/${name}"
@@ -451,6 +527,30 @@ if ! codesign -d --entitlements - --xml "${macos_dir}/gk" 2>/dev/null | grep -q 
   exit 3
 fi
 echo "      JIT entitlement present on gk"
+
+# --- make Finder notice the new icon -----------------------------------------
+# The bundle is rm -rf'd and rebuilt at the SAME path every time, so Finder and
+# the Dock keep serving the icon they cached for the old bundle -- the app shows
+# a generic or previous icon until something else happens to invalidate the
+# cache. The icon itself is fine; only the cache is stale.
+#
+# Two steps, and both are needed:
+#   1. touch the bundle and Info.plist so their mtimes are newer than the cache
+#      entry. LaunchServices keys freshness off the bundle's modification date,
+#      and cp -R can preserve older timestamps from the source tree.
+#   2. re-register with LaunchServices so the icon is re-read now rather than
+#      whenever the database next happens to refresh.
+#
+# lsregister lives outside PATH and its location is not API, so this is
+# best-effort: a failure here costs a stale icon, never a broken bundle.
+echo "    refreshing Finder icon cache"
+touch "${contents}/Info.plist" "${app}"
+lsregister="/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister"
+if [[ -x "${lsregister}" ]]; then
+  "${lsregister}" -f "${app}" >/dev/null 2>&1 || true
+else
+  echo "      note: lsregister not found; the icon may need a Finder restart" >&2
+fi
 
 echo "==> ${app}"
 echo "    size: $(du -sh "${app}" | cut -f1)"

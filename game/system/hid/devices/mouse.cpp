@@ -1,5 +1,36 @@
 #include "mouse.h"
 
+#include <algorithm>
+#include <cmath>
+
+namespace {
+/*!
+ * Scale a relative mouse motion by the user's sensitivity and map it onto the 0-255 analog
+ * range, clamping while the value is still a float.
+ *
+ * The sensitivity arrives from pc_set_mouse_camera_sens (game/kernel/common/kmachine.cpp),
+ * which copies raw GOAL word bits into a float without validation, and is persisted to a
+ * user-editable settings file. A large sensitivity combined with a large relative motion
+ * (mouse warp, focus change, high-DPI device) makes the product exceed int's range.
+ *
+ * Converting an out-of-range float to an integer is UNDEFINED BEHAVIOUR, and our two targets
+ * disagree: x86-64 cvttsd2si wraps, ARM64 fcvtzs saturates -- so the camera would swing to
+ * OPPOSITE extremes on the two architectures from identical input. Same class as the IOP clock
+ * bug fixed in game/system/IOP_Kernel.cpp.
+ *
+ * This previously read `std::clamp(127 + int(rel * sens), 0, 255)`, which clamps AFTER the
+ * conversion and therefore cannot prevent the UB.
+ */
+int mouse_sens_adjust(float rel_amount, float sens) {
+  const float scaled = rel_amount * sens;
+  // NaN is unordered, so it must be rejected explicitly rather than by clamping.
+  if (std::isnan(scaled)) {
+    return 127;  // neutral
+  }
+  return static_cast<int>(std::clamp(127.0f + scaled, 0.0f, 255.0f));
+}
+}  // namespace
+
 MouseDevice::MouseDevice(SDL_Window* window, std::shared_ptr<game_settings::InputSettings> settings)
     : m_window(window) {
   m_settings = settings;
@@ -161,14 +192,17 @@ void MouseDevice::process_event(const SDL_Event& event,
     m_xcoord = event.motion.x;
     m_ycoord = event.motion.y;
     if (m_control_camera) {
-      const auto xrel_amount = float(event.motion.xrel);
-      const auto xadjust = std::clamp(127 + int(xrel_amount * m_xsens), 0, 255);
+      // The clamp must be applied in the FLOAT domain, BEFORE the conversion to int -- see
+      // mouse_sens_adjust below. Clamping the already-converted int (as this code used to do)
+      // is too late: converting an out-of-range float to an integer is undefined behaviour, and
+      // x86-64 and ARM64 disagree about the result, so the UB has already happened by the time
+      // std::clamp sees the value.
+      const auto xadjust = mouse_sens_adjust(float(event.motion.xrel), m_xsens);
       if (xadjust > 0) {
         m_mouse_moved_x = true;
       }
       data->analog_data.at(2) = xadjust;
-      const auto yrel_amount = float(event.motion.yrel);
-      const auto yadjust = std::clamp(127 + int(yrel_amount * m_ysens), 0, 255);
+      const auto yadjust = mouse_sens_adjust(float(event.motion.yrel), m_ysens);
       if (yadjust > 0) {
         m_mouse_moved_y = true;
       }

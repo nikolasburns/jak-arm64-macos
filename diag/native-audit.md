@@ -1,7 +1,9 @@
 # Native execution audit — zero Rosetta / x86 involvement
 
-**Date:** 2026-08-14 · **Host:** Apple M4 Pro, macOS (`uname -m` → `arm64`)
-**Games audited:** Jak 1 (played to title) and Jak 2 (booted to title)
+**Date:** 2026-08-14 (Jak 1, Jak 2) · **2026-08-15 (Jak 3 re-audit)**
+**Host:** Apple M4 Pro, macOS (`uname -m` → `arm64`)
+**Games audited:** Jak 1 (played to title), Jak 2 (booted to title),
+**Jak 3 (sampled live in active gameplay, `-boot -fakeiso -debug`)**
 **Overall verdict: PASS.**
 
 This report backs the README's "native ARM64, no Rosetta" claim. Every assertion
@@ -17,17 +19,17 @@ be, even in principle.
 
 ## Summary
 
-| # | Check | Jak 1 | Jak 2 |
-|---|---|---|---|
-| 1 | Process not translated (`P_TRANSLATED`) | PASS | PASS |
-| 2 | Translation detector validated on a known-translated process | PASS | PASS |
-| 3 | No Rosetta translation artifacts in the address space | PASS | PASS |
-| 4 | No x86-only Mach-O image mapped | PASS | PASS |
-| 5 | Runtime reads the ARM64 asset tree only | PASS | PASS |
-| 6 | Live JIT'd GOAL code disassembles as ARM64 | PASS | PASS |
-| 7 | All produced binaries are arm64 | PASS | PASS |
-| 8 | On-disk GOAL objects are ARM64-encoded and distinct from the x86 tree | PASS | PASS |
-| 9 | x86 GOAL code is not merely absent but unexecutable here | PASS | PASS |
+| # | Check | Jak 1 | Jak 2 | Jak 3 |
+|---|---|---|---|---|
+| 1 | Process not translated (`P_TRANSLATED`) | PASS | PASS | **PASS** |
+| 2 | Translation detector validated on a known-translated process | PASS | PASS | **PASS** |
+| 3 | No Rosetta translation artifacts in the address space | PASS | PASS | **PASS** |
+| 4 | No x86-only Mach-O image mapped | PASS | PASS | **PASS** |
+| 5 | Runtime reads the ARM64 asset tree only | PASS | PASS | **PASS** |
+| 6 | Live JIT'd GOAL code disassembles as ARM64 | PASS | PASS | **PASS** |
+| 7 | All produced binaries are arm64 | PASS | PASS | **PASS** |
+| 8 | On-disk GOAL objects are ARM64-encoded and distinct from the x86 tree | PASS | PASS | **PASS** |
+| 9 | x86 GOAL code is not merely absent but unexecutable here | PASS | PASS | **PASS** |
 
 ---
 
@@ -309,3 +311,105 @@ rather than degrading silently.
   disassembling an object's segment start (link data, not code) before anchoring
   on a real function, and briefly reading repo-directory-name matches as
   asset-path evidence. Both were replaced with the stronger evidence shown above.
+
+---
+
+## Jak 3 re-audit (2026-08-15)
+
+Jak 3 was added after the original audit, so it was re-verified independently
+rather than assumed to inherit the result. Sampled **live, in active gameplay**
+(`gk -v --game jak3 -- -boot -fakeiso -debug`, confirmed past
+`kernel: machine started` / `Done birth`). Every layer passes.
+
+### L1 — the process is not translated
+
+Detector validated first, against a genuinely translated process, so a clean
+flag means something:
+```
+$ arch -x86_64 /bin/sleep 25 &
+pid 77940: p_flag=0x34004  P_TRANSLATED(0x20000)=YES (Rosetta)   <-- detector works
+pid 77933: p_flag=0x4004   P_TRANSLATED(0x20000)=NO (native)
+```
+Live Jak 3:
+```
+pid 78042: p_flag=0x4004  P_TRANSLATED(0x20000)=NO (native)
+```
+Identical to the Jak 1 / Jak 2 result.
+
+### L2 — every mapped image is ARM64
+
+`vmmap` matched 5 `libRosetta.dylib` regions, which is the same benign artifact
+the original audit recorded. Proven benign two ways rather than cited:
+```
+$ lipo -archs /usr/lib/libRosetta.dylib
+/usr/lib/libRosetta.dylib [arm64e]          <-- the stub is itself ARM64
+$ vmmap <Finder pid> | grep -c libRosetta
+5                                           <-- mapped into a plainly-native process too
+```
+
+Four *fat* system libraries (`libsystem_kernel`, `libsystem_platform`,
+`libsystem_pthread`, `libobjc-trampolines`) contain x86_64 slices **on disk**.
+What matters is which slice is **mapped**, read directly from the mapped Mach-O
+headers (`cputype`: ARM64 = `0x0100000c`, x86_64 = `0x01000007`):
+```
+0x18cdcf000: 0xfeedfacf 0x0100000c     libsystem_kernel.dylib  -> ARM64
+0x105c5c000: 0xfeedfacf 0x0100000c     libobjc-trampolines.dylib -> ARM64
+0x104fa4000: 0xfeedfacf 0x0100000c     gk                      -> ARM64
+```
+**No x86_64 slice is mapped anywhere in the process.**
+
+### L3 — live JIT'd GOAL code is ARM64 (the strongest check)
+
+Executable pages inside the GOAL heap (`r-x`, base `g_ee_main_mem` =
+`0x7000000000`) were searched for the A64 `RET` encoding `0xd65f03c0` and
+disassembled in place.
+
+The kernel `nothing` stub — **the exact site that held the x86 byte `0xc3`
+before the session-19 fix** — now disassembles as native A64:
+```
+0x7000160004: ret
+```
+
+A full JIT'd GOAL function epilogue, which cannot be mistaken for anything else:
+```
+0x70010003c0: str    s10, [x16]
+0x70010003cc: add    x16, x16, #0x30
+0x70010003d0: ldr    q11, [x16]        <-- NEON 128-bit vector restore
+0x70010003dc: ldr    q10, [x16]
+0x70010003e8: ldr    q9, [x16]
+0x70010003ec: ldr    q8, [sp]
+0x70010003f0: add    sp, sp, #0x40
+0x70010003f4: ldr    x23, [sp], #0x10  <-- allocator-saved GPR restores
+0x70010003f8: ldr    x19, [sp], #0x10
+0x70010003fc: ldr    x30, [sp], #0x10
+0x7001000400: ret
+```
+NEON `q8`-`q11` restores, the GOAL offset register `x22`, and the saved-GPR set
+`x19`/`x23`/`x30` — emitted by this repository's ARM64 backend, executing live.
+
+### L4 — build artifacts
+
+```
+$ lipo -archs build/game/gk.app/Contents/MacOS/gk   -> arm64
+$ lipo -archs build/goalc/goalc                     -> arm64
+$ lipo -archs build/decompiler/extractor            -> arm64
+```
+No fat binaries: there is no x86 slice to fall back to.
+
+On-disk jak3 GOAL objects, counting A64 `RET` encodings at the best 4-byte phase
+(GOAL code is not file-aligned — see PORTING-NOTES):
+
+| object | `out/jak3-arm64/obj` | `out/jak3/obj` (x86) |
+|---|---|---|
+| `gkernel.o` | **76** | 0 |
+| `gcommon.o` | **82** | 0 |
+| `target.o` | **103** | 0 |
+| `enemy.o` | **118** | 0 |
+| `collide-cache.o` | **16** | 0 |
+| `sky-tng.o` | **23** | 0 |
+
+Every ARM64 object contains real A64 return instructions; every x86 counterpart
+contains **zero**. The two trees are independently compiled and distinct.
+
+**Jak 3 verdict: PASS on all layers.** Jak 3 runs as native ARM64 with no
+Rosetta involvement and no x86 code in the process.
