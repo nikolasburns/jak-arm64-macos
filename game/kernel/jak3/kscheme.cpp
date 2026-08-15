@@ -550,12 +550,31 @@ Ptr<Function> make_stack_arg_function_from_c(void* func) {
  * Create a GOAL function which does nothing and immediately returns.
  */
 Ptr<Function> make_nothing_func() {
+#if defined(__aarch64__)
+  // The heap page this lands on may currently be execute-only from an earlier linked function,
+  // so make it writable before planting code into it.
+  if (g_ee_main_mem && kglobalheap.offset) {
+    jit_memory::make_writable(kglobalheap->current.c(), 0x40);
+  }
+#endif
   auto mem = Ptr<u8>(alloc_heap_object(s7.offset + FIX_SYM_GLOBAL_HEAP,
                                        u32_in_fixed_sym(FIX_SYM_FUNCTION_TYPE), 0x14, UNKNOWN_PP));
 
+#if defined(__aarch64__)
+  {
+    // Both halves are required: the body must be real A64 (an x86 `ret` byte is not a valid A64
+    // instruction), and the page must end up executable with the icache invalidated. Fixing only
+    // permissions turns the instruction-fetch fault into an illegal-instruction fault.
+    jit_memory::JitWriteScope scope(mem.c(), 0x14);
+    const auto code_size = arm64_trampoline::emit_nothing(mem.c());
+    scope.flush_instruction_cache();
+    (void)code_size;
+  }
+#else
   // a single x86-64 ret.
   mem.c()[0] = 0xc3;
   // CacheFlush(mem, 8);
+#endif
   return mem.cast<Function>();
 }
 
@@ -563,14 +582,28 @@ Ptr<Function> make_nothing_func() {
  * Create a GOAL function which returns 0.
  */
 Ptr<Function> make_zero_func() {
+#if defined(__aarch64__)
+  if (g_ee_main_mem && kglobalheap.offset) {
+    jit_memory::make_writable(kglobalheap->current.c(), 0x40);
+  }
+#endif
   auto mem = Ptr<u8>(alloc_heap_object(s7.offset + FIX_SYM_GLOBAL_HEAP,
                                        u32_in_fixed_sym(FIX_SYM_FUNCTION_TYPE), 0x14, UNKNOWN_PP));
+#if defined(__aarch64__)
+  {
+    jit_memory::JitWriteScope scope(mem.c(), 0x14);
+    const auto code_size = arm64_trampoline::emit_zero(mem.c());
+    scope.flush_instruction_cache();
+    (void)code_size;
+  }
+#else
   // xor eax, eax
   mem.c()[0] = 0x31;
   mem.c()[1] = 0xc0;
   // ret
   mem.c()[2] = 0xc3;
   // CacheFlush(mem, 8);
+#endif
   return mem.cast<Function>();
 }
 
