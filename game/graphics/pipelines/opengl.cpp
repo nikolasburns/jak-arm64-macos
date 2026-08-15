@@ -235,6 +235,27 @@ static void gl_exit() {
   gl_inited = false;
 }
 
+// imgui ships its OWN GL loader (imgui_impl_opengl3_loader.h, a stripped gl3w),
+// entirely separate from glad. On __APPLE__ its open_libgl() is unconditional:
+// it dlopen()s /System/Library/Frameworks/OpenGL.framework and dlsym()s every
+// entry point straight out of AppleGL, with no EGL/GLES awareness at all. On the
+// ANGLE path that binds imgui to the wrong GL implementation -- AppleGL's
+// glGetIntegerv then runs with an EGL context current and no CGL context to
+// dereference, and faults on a null context pointer inside libGL.dylib before it
+// can return.
+//
+// This is the same defect class as gladLoadGL() (session 3.5): a second loader
+// resolving against the system framework while the real context belongs to
+// somebody else. It is declared here rather than by including the loader header,
+// which is an implementation header -- it #defines __gl_h_ and redeclares the GL
+// typedefs, so pulling it in beside glad would collide. imgl3wInit2 is the
+// loader's documented public entry point for exactly this override.
+extern "C" {
+typedef void (*GL3WglProc)(void);
+typedef GL3WglProc (*GL3WGetProcAddressProc)(const char* proc);
+int imgl3wInit2(GL3WGetProcAddressProc proc);
+}
+
 static void init_imgui(SDL_Window* window,
                        SDL_GLContext gl_context,
                        const std::string& glsl_version) {
@@ -266,8 +287,29 @@ static void init_imgui(SDL_Window* window,
   // cursor error is set here that we clear.
   SDL_ClearError();
 
+  // Load imgui's GL entry points through SDL, which resolves them against
+  // whichever GL the current context actually belongs to.
+  //
+  // This runs on BOTH backends, and is safe on the desktop path by the same
+  // argument as the glad fix: there the context IS AppleGL's, so SDL hands back
+  // pointers into the very library imgui's own loader would have dlopen()ed.
+  // Keeping one path avoids a desktop branch that nothing would exercise.
+  //
+  // Order is load-bearing. ImGui_ImplOpenGL3_Init calls the backend's own
+  // ImGui_ImplOpenGL3_InitLoader, which is lazy -- it only runs imgl3wInit() if
+  // glGetIntegerv is still null. Populating the table first means the AppleGL
+  // dlopen never happens. Doing this AFTER init would be too late.
+  if (imgl3wInit2((GL3WGetProcAddressProc)SDL_GL_GetProcAddress) != 0) {
+    lg::error("imgui GL loader init failed");
+    dialogs::create_error_message_dialog("Critical Error Encountered",
+                                         "Unable to initialize the ImGui OpenGL loader.");
+    return;
+  }
+
   // set up the renderer
-  ImGui_ImplOpenGL3_Init(glsl_version.c_str());
+  if (!ImGui_ImplOpenGL3_Init(glsl_version.c_str())) {
+    lg::error("ImGui_ImplOpenGL3_Init failed (glsl version \"{}\")", glsl_version);
+  }
 }
 
 static std::shared_ptr<GfxDisplay> gl_make_display(int width,
@@ -426,11 +468,22 @@ static std::shared_ptr<GfxDisplay> gl_make_display(int width,
   {
     auto p = scoped_prof("startup::sdl::init_imgui");
     // setup imgui
+    //
+    // imgui compiles its own shaders from this prologue, so it needs the same
+    // dialect the rest of the tree gets from shader_prologue() -- a desktop
+    // "#version 410" against a GLES 3.0 context would compile-fail at imgui's
+    // first frame rather than at init. imgui selects a dedicated 300 es shader
+    // pair on an exact "#version 300" match (imgui_impl_opengl3.cpp), and it
+    // detects GlProfileIsES3 itself from the GL_VERSION string ANGLE reports.
+    if (gfx_backend_is_angle()) {
+      init_imgui(window, gl_context, "#version 300 es");
+    } else {
 #ifdef __APPLE__
-    init_imgui(window, gl_context, "#version 410");
+      init_imgui(window, gl_context, "#version 410");
 #else
-    init_imgui(window, gl_context, "#version 430");
+      init_imgui(window, gl_context, "#version 430");
 #endif
+    }
   }
 
   return std::static_pointer_cast<GfxDisplay>(display);

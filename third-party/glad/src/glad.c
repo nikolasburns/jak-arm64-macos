@@ -2196,6 +2196,9 @@ static int find_extensionsGL(void) {
 	return 1;
 }
 
+/* Set by find_coreGL when the GL_VERSION string carried a GLES prefix. */
+static int glad_is_gles = 0;
+
 static void find_coreGL(void) {
 
     /* Thank you @elmindreda
@@ -2246,6 +2249,14 @@ static void find_coreGL(void) {
         minor = 3;
     }
 
+    /* Remember that this was a GLES context. The 3.3 cap above is deliberate --
+     * it must NOT be raised to 4.1, because load_GL_VERSION_4_1 also binds
+     * genuinely desktop-only entry points (glProgramUniform1d, glViewportArrayv,
+     * the whole double-precision vertex-attrib family) that GLES has no notion
+     * of. A handful of GLES-native calls are nonetheless filed under 4.1+ by
+     * this desktop-generated loader; they are bound individually below. */
+    glad_is_gles = is_gles;
+
     GLVersion.major = major; GLVersion.minor = minor;
     max_loaded_major = major; max_loaded_minor = minor;
 	GLAD_GL_VERSION_1_0 = (major == 1 && minor >= 0) || major > 1;
@@ -2292,6 +2303,22 @@ int gladLoadGLLoader(GLADloadproc load) {
 	load_GL_VERSION_4_1(load);
 	load_GL_VERSION_4_2(load);
 	load_GL_VERSION_4_3(load);
+
+	/* GLES-native entry points that this desktop-generated loader files above the
+	 * 3.3 ceiling, so the version-gated blocks above skip them on a GLES context.
+	 *
+	 * glClearDepthf is core GLES 2.0+, but on desktop GL the float-valued variant
+	 * only arrived in 4.1 (via GL_ARB_ES2_compatibility), so glad files it under
+	 * load_GL_VERSION_4_1. On a GLES 3.0 context that block never runs, leaving
+	 * the pointer NULL -- and unlike a rejected call, a NULL pointer faults at
+	 * pc=0 on the first use, far from the load. ANGLE exports it correctly; it
+	 * was never missing, only unbound.
+	 *
+	 * Bound only when GLES was detected, so the desktop path is untouched: there
+	 * load_GL_VERSION_4_1 has already bound it from the same loader. */
+	if (glad_is_gles) {
+		glad_glClearDepthf = (PFNGLCLEARDEPTHFPROC)load("glClearDepthf");
+	}
 
 	if (!find_extensionsGL()) return 0;
 	load_GL_ARB_bindless_texture(load);
