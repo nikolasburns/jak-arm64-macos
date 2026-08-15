@@ -22,7 +22,7 @@ static constexpr bool link_debug_printfs = false;
 // SYMDUMP support: name of the object currently being linked.
 static const char* g_symdump_obj = "?";
 
-uint32_t link_control::jak1_work() {
+LinkStatus link_control::jak1_work() {
   auto old_debug_segment = DebugSegment;
   if (m_keep_debug) {
     DebugSegment = s7.offset + true_symbol_offset(g_game_version);
@@ -31,7 +31,7 @@ uint32_t link_control::jak1_work() {
   // set type tag of link block
   *((m_link_block_ptr - 4).cast<u32>()) = *((s7 + jak1_symbols::FIX_SYM_LINK_BLOCK).cast<u32>());
 
-  uint32_t rv;
+  LinkStatus rv;
 
   if (m_version == 3) {
     ASSERT(m_opengoal);
@@ -41,7 +41,8 @@ uint32_t link_control::jak1_work() {
     rv = jak1_work_v2();
   } else {
     ASSERT_MSG(false, fmt::format("UNHANDLED OBJECT FILE VERSION {} IN WORK!", m_version));
-    return 0;
+    fail();
+    return LinkStatus::Failed;
   }
 
   DebugSegment = old_debug_segment;
@@ -394,7 +395,7 @@ static void symguard_check(const char* when) {
   }
 }
 
-uint32_t link_control::jak1_work_v3() {
+LinkStatus link_control::jak1_work_v3() {
   g_symdump_obj = m_object_name;
   symguard_check(m_object_name);
   ObjectFileHeader* ofh = m_link_block_ptr.cast<ObjectFileHeader>().c();
@@ -427,7 +428,8 @@ uint32_t link_control::jak1_work_v3() {
             if (ofh->code_infos[seg_id].offset == 0) {
               MsgErr("dkernel: unable to malloc %d bytes for debug-segment\n",
                      ofh->code_infos[seg_id].size);
-              return 1;
+              fail();
+              return LinkStatus::Failed;
             }
             jak1::ultimate_memcpy(Ptr<u8>(ofh->code_infos[seg_id].offset).c(), src.c(),
                                   ofh->code_infos[seg_id].size);
@@ -444,7 +446,8 @@ uint32_t link_control::jak1_work_v3() {
           if (ofh->code_infos[seg_id].offset == 0) {
             MsgErr("dkernel: unable to malloc %d bytes for main-segment\n",
                    ofh->code_infos[seg_id].size);
-            return 1;
+            fail();
+            return LinkStatus::Failed;
           }
           jak1::ultimate_memcpy(Ptr<u8>(ofh->code_infos[seg_id].offset).c(), src.c(),
                                 ofh->code_infos[seg_id].size);
@@ -467,7 +470,8 @@ uint32_t link_control::jak1_work_v3() {
           if (ofh->code_infos[seg_id].offset == 0) {
             MsgErr("dkernel: unable to malloc %d bytes for top-level-segment\n",
                    ofh->code_infos[seg_id].size);
-            return 1;
+            fail();
+            return LinkStatus::Failed;
           }
           jak1::ultimate_memcpy(Ptr<u8>(ofh->code_infos[seg_id].offset).c(), src.c(),
                                 ofh->code_infos[seg_id].size);
@@ -479,7 +483,7 @@ uint32_t link_control::jak1_work_v3() {
 
     m_state = 1;
     m_segment_process = 0;
-    return 0;
+    return LinkStatus::InProgress;
   } else if (m_state == 1) {
     // state 1: linking. For now all links are done at once. This is probably going to be fine on a
     // modern computer.  But the game broke this into multiple steps.
@@ -522,15 +526,16 @@ uint32_t link_control::jak1_work_v3() {
     } else {
       // all done, can set the entry point to the top-level.
       m_entry = Ptr<u8>(ofh->code_infos[TOP_LEVEL_SEGMENT].offset) + 4;
-      return 1;
+      return LinkStatus::Complete;
     }
 
-    return 0;
+    return LinkStatus::InProgress;
   }
 
   else {
     printf("WORK v3 INVALID STATE\n");
-    return 1;
+    fail();
+    return LinkStatus::Failed;
   }
 }
 
@@ -540,7 +545,7 @@ uint32_t link_control::jak1_work_v3() {
 #define OBJ_V2_CLOSE_ENOUGH 0x90
 #define OBJ_V2_MAX_TRANSFER 0x80000
 
-uint32_t link_control::jak1_work_v2() {
+LinkStatus link_control::jak1_work_v2() {
   //  u32 startCycle = kernel.read_clock(); todo
 
   if (m_state == LINK_V2_STATE_INIT_COPY) {  // initialization and copying to heap
@@ -563,7 +568,8 @@ uint32_t link_control::jak1_work_v2() {
       m_heap->current = m_object_data + m_code_size;
       if (m_heap->top.offset <= m_heap->current.offset) {
         MsgErr("dkernel: heap overflow\n");  // game has ~% instead of \n :P
-        return 1;
+        fail();
+        return LinkStatus::Failed;
       }
     } else {  // not close enough, need to move the object
 
@@ -578,7 +584,8 @@ uint32_t link_control::jak1_work_v2() {
         }
         if (!m_object_data.offset) {
           MsgErr("dkernel: unable to malloc %d bytes for data-segment\n", m_code_size);
-          return 1;
+          fail();
+          return LinkStatus::Failed;
         }
       }
 
@@ -590,7 +597,7 @@ uint32_t link_control::jak1_work_v2() {
         jak1::ultimate_memcpy((m_object_data + m_segment_process).c(), source.c(),
                               OBJ_V2_MAX_TRANSFER);
         m_segment_process += OBJ_V2_MAX_TRANSFER;
-        return 0;  // return, don't want to take too long.
+        return LinkStatus::InProgress;  // return, don't want to take too long.
       }
 
       // if we have bytes to copy, but they are less than the max transfer, do it in one shot!
@@ -599,7 +606,7 @@ uint32_t link_control::jak1_work_v2() {
         if (m_segment_process > 0) {  // if we did a previous copy, we return now....
           m_state = LINK_V2_STATE_OFFSETS;
           m_segment_process = 0;
-          return 0;
+          return LinkStatus::InProgress;
         }
       }
     }
@@ -735,7 +742,7 @@ uint32_t link_control::jak1_work_v2() {
     }
   }
   m_entry = m_object_data + 4;
-  return 1;
+  return LinkStatus::Complete;
 }
 
 /*!
@@ -852,10 +859,15 @@ Ptr<uint8_t> link_and_exec(Ptr<uint8_t> data,
                            bool jump_from_c_to_goal) {
   link_control lc;
   lc.jak1_jak2_begin(data, name, size, heap, flags);
-  uint32_t done;
+  LinkStatus status;
   do {
-    done = lc.jak1_work();
-  } while (!done);
+    status = lc.jak1_work();
+  } while (status == LinkStatus::InProgress);
+  // A failed link must NOT be finished: jak1_finish executes the top-level
+  // segment, and on failure m_entry is not a valid function.
+  if (status != LinkStatus::Complete) {
+    return Ptr<uint8_t>(0);
+  }
   lc.jak1_finish(jump_from_c_to_goal);
   return lc.m_entry;
 }
@@ -879,26 +891,28 @@ uint64_t link_begin(u64* args) {
   // object data, name size, heap flags
   saved_link_control.jak1_jak2_begin(Ptr<u8>(args[0]), Ptr<char>(args[1]).c(), args[2],
                                      Ptr<kheapinfo>(args[3]), args[4]);
-  auto work_result = saved_link_control.jak1_work();
+  auto status = saved_link_control.jak1_work();
   // if we managed to finish in one shot, take care of calling finish
-  if (work_result) {
+  if (status == LinkStatus::Complete) {
     // called from goal
     saved_link_control.jak1_finish(false);
   }
 
-  return work_result != 0;
+  // Report "done" for BOTH Complete and Failed so the GOAL caller stops
+  // pumping link_resume; only Complete gets finished.
+  return status != LinkStatus::InProgress;
 }
 
 /*!
  * GOAL exported function for doing a small amount of linking work on the saved_link_control
  */
 uint64_t link_resume() {
-  auto work_result = saved_link_control.jak1_work();
-  if (work_result) {
+  auto status = saved_link_control.jak1_work();
+  if (status == LinkStatus::Complete) {
     // called from goal
     saved_link_control.jak1_finish(false);
   }
-  return work_result != 0;
+  return status != LinkStatus::InProgress;
 }
 
 /*!
