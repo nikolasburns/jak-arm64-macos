@@ -6,8 +6,6 @@
 
 #include "game/graphics/pipelines/opengl.h"
 
-namespace {
-
 // The dialect prologue injected as line 1 of every shader.
 //
 // On-disk shaders carry no `#version` line: GLSL requires it to be the first
@@ -29,12 +27,6 @@ std::string shader_prologue(ShaderBackend backend, bool is_fragment) {
     default:
       return "#version 410 core\n";
   }
-}
-
-}  // namespace
-
-std::string shader_prologue_for_test(ShaderBackend backend, bool is_fragment) {
-  return shader_prologue(backend, is_fragment);
 }
 
 Shader::Shader(const std::string& shader_name, GameVersion version) : m_name(shader_name) {

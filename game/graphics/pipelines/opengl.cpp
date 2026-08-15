@@ -22,6 +22,7 @@
 #include "game/graphics/display.h"
 #include "game/graphics/gfx.h"
 #include "game/graphics/opengl_renderer/OpenGLRenderer.h"
+#include "game/graphics/opengl_renderer/Shader.h"
 #include "game/graphics/opengl_renderer/debug_gui.h"
 #include "game/graphics/screenshot.h"
 #include "game/graphics/texture/TexturePool.h"
@@ -355,6 +356,12 @@ void GLDisplay::init_splash() {
       file_util::read_text_file(file_util::get_file_path({shader_folder, "splash.vert"}));
   auto frag_src =
       file_util::read_text_file(file_util::get_file_path({shader_folder, "splash.frag"}));
+
+  // The on-disk shaders carry no `#version`; it is injected here, exactly as
+  // ShaderLibrary does for the shaders it owns. Use the shared builder rather
+  // than a local copy so the two sites cannot drift apart.
+  vert_src = shader_prologue(kShaderBackend, false) + vert_src;
+  frag_src = shader_prologue(kShaderBackend, true) + frag_src;
 
   constexpr int len = 1024;
   GLint compile_ok;

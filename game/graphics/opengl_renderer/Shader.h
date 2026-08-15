@@ -20,9 +20,14 @@ enum class ShaderBackend {
 // runtime toggle lands; AppleGL keeps the existing path byte-for-byte.
 constexpr ShaderBackend kShaderBackend = ShaderBackend::AppleGL;
 
-// The dialect prologue Shader::Shader prepends as line 1 of every shader.
-// Exposed so the dialect contract can be tested without a GL context.
-std::string shader_prologue_for_test(ShaderBackend backend, bool is_fragment);
+// The dialect prologue prepended as line 1 of every shader loaded from disk.
+//
+// EVERY consumer of on-disk shader text must go through this, not just
+// ShaderLibrary: the shaders carry no `#version` of their own, so a compile site
+// that reads a .vert/.frag directly and skips the prologue fails with
+// "#version required and missing". The splash screen (GLDisplay::init_splash)
+// is such a site. Call this rather than rebuilding the prologue locally.
+std::string shader_prologue(ShaderBackend backend, bool is_fragment);
 
 class Shader {
  public:

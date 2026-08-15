@@ -120,15 +120,15 @@ TEST(ShaderDialect, NoHexFloatLiterals) {
 // has none, unlike desktop GL).
 TEST(ShaderDialect, PrologueMatchesBackend) {
   // AppleGL: desktop core profile, no precision statements.
-  const auto gl_vert = shader_prologue_for_test(ShaderBackend::AppleGL, false);
-  const auto gl_frag = shader_prologue_for_test(ShaderBackend::AppleGL, true);
+  const auto gl_vert = shader_prologue(ShaderBackend::AppleGL, false);
+  const auto gl_frag = shader_prologue(ShaderBackend::AppleGL, true);
   EXPECT_EQ(gl_vert.rfind("#version 410 core", 0), 0u);
   EXPECT_EQ(gl_frag.rfind("#version 410 core", 0), 0u);
   EXPECT_EQ(gl_frag.find("precision"), std::string::npos);
 
   // ANGLE: ES 3.00, with an explicit float precision in the fragment stage.
-  const auto es_vert = shader_prologue_for_test(ShaderBackend::Angle, false);
-  const auto es_frag = shader_prologue_for_test(ShaderBackend::Angle, true);
+  const auto es_vert = shader_prologue(ShaderBackend::Angle, false);
+  const auto es_frag = shader_prologue(ShaderBackend::Angle, true);
   EXPECT_EQ(es_vert.rfind("#version 300 es", 0), 0u);
   EXPECT_EQ(es_frag.rfind("#version 300 es", 0), 0u);
   EXPECT_NE(es_frag.find("precision highp float;"), std::string::npos);
@@ -138,4 +138,51 @@ TEST(ShaderDialect, PrologueMatchesBackend) {
     EXPECT_EQ(p.rfind("#version", 0), 0u) << "prologue must begin with #version";
     EXPECT_EQ(p.back(), '\n') << "prologue must end in a newline";
   }
+}
+
+// The rules above check the shader FILES. This one checks the CALLERS, which is
+// where the invariant actually lives.
+//
+// Session 1 verified every shader in ShaderLibrary and still shipped a break:
+// the splash screen compiles its own shader outside the library, read the .vert
+// straight off disk, and never got the injected prologue -- so it failed with
+// "#version required and missing" once per frame for a whole load. Enumerating
+// the registry is not enumerating the callers.
+//
+// So: find every glShaderSource call in the graphics tree and require that the
+// text it hands to GL came through shader_prologue(). A new compile site that
+// skips the prologue fails here instead of at someone's loading screen.
+TEST(ShaderDialect, EveryCompileSiteInjectsThePrologue) {
+  std::vector<fs::path> sources;
+  for (const auto& dir : {"game/graphics"}) {
+    for (const auto& p : fs::recursive_directory_iterator(file_util::get_file_path({dir}))) {
+      if (!p.is_regular_file()) {
+        continue;
+      }
+      const auto ext = p.path().extension().string();
+      if (ext == ".cpp" || ext == ".mm") {
+        sources.push_back(p.path());
+      }
+    }
+  }
+  ASSERT_FALSE(sources.empty()) << "found no graphics sources to scan";
+
+  int compile_sites = 0;
+  for (const auto& path : sources) {
+    const auto text = strip_comments(file_util::read_text_file(path));
+    if (text.find("glShaderSource") == std::string::npos) {
+      continue;
+    }
+    ++compile_sites;
+    // The file feeds source text to GL, so it must also build the prologue.
+    EXPECT_NE(text.find("shader_prologue("), std::string::npos)
+        << path.filename().string()
+        << " calls glShaderSource but never calls shader_prologue(); on-disk"
+           " shaders carry no #version, so this site will fail to compile."
+           " Route it through shader_prologue() rather than adding a local copy.";
+  }
+
+  // Guard the scan itself: if a refactor moves the compile sites, this test must
+  // not silently pass by finding nothing to check.
+  EXPECT_GE(compile_sites, 2) << "expected at least the ShaderLibrary and splash compile sites";
 }
