@@ -1,0 +1,247 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Build a standalone, double-clickable macOS .app for one game.
+#
+#   scripts/package-app.sh jak1 [output_dir]
+#   scripts/package-app.sh jak2 [output_dir]
+#
+# The bundle embeds the compiled game data from out/<game>-arm64, so it runs
+# with no dependency on this checkout. That data is derived from the user's own
+# discs: the resulting .app is FOR PERSONAL USE and must not be distributed.
+# This script itself contains no game data and is safe to commit.
+#
+# Signing is ad-hoc (-s -). No notarization: that would require distribution.
+
+game="${1:-}"
+if [[ "${game}" != "jak1" && "${game}" != "jak2" ]]; then
+  echo "usage: $0 {jak1|jak2} [output_dir]" >&2
+  exit 2
+fi
+
+project_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+output_dir="${2:-${HOME}/Applications}"
+
+case "${game}" in
+  jak1) app_name="Jak 1";     bundle_id="dev.nboily.jak1" ;;
+  jak2) app_name="Jak 2";     bundle_id="dev.nboily.jak2" ;;
+esac
+
+app="${output_dir}/${app_name}.app"
+contents="${app}/Contents"
+macos_dir="${contents}/MacOS"
+data_dir="${contents}/Resources/data"
+src_app="${project_root}/build/game/gk.app"
+src_gk="${src_app}/Contents/MacOS/gk"
+out_tree="${project_root}/out/${game}-arm64"
+
+if [[ "$(uname -m)" != "arm64" ]]; then
+  echo "error: must run on an arm64 host" >&2
+  exit 2
+fi
+if [[ ! -x "${src_gk}" ]]; then
+  echo "error: no gk binary at ${src_gk} (build first)" >&2
+  exit 2
+fi
+if [[ "$(lipo -archs "${src_gk}")" != "arm64" ]]; then
+  echo "error: gk is not pure arm64" >&2
+  exit 4
+fi
+if [[ ! -d "${out_tree}/iso" ]]; then
+  echo "error: missing compiled data ${out_tree}/iso — run (mi) first" >&2
+  exit 2
+fi
+
+echo "==> packaging ${app_name}"
+rm -rf "${app}"
+mkdir -p "${macos_dir}" "${contents}/Resources"
+
+# --- executable + its dylibs -------------------------------------------------
+# CMake does NOT create Contents/Frameworks: the freshly built gk resolves its
+# ~16 dylibs through absolute LC_RPATH entries pointing into build/. Copying the
+# binary alone therefore produces a bundle that only works while this checkout
+# exists — it looks self-contained and is not. package_macos_arm64.sh already
+# implements recursive dependency copying + @rpath rewriting, so delegate to it
+# and then verify no absolute repo path survives.
+cp "${src_gk}" "${macos_dir}/gk"
+mkdir -p "${contents}/Frameworks"
+
+frameworks_dir="${contents}/Frameworks"
+copied=""
+
+read_rpaths() {
+  otool -l "$1" | awk '/LC_RPATH/{c=1;next} c&&/path /{sub(/^.*path /,"");sub(/ \(offset.*$/,"");print;c=0}'
+}
+
+normalise_rpaths() {
+  local bin="$1" rp
+  while IFS= read -r rp; do
+    [[ -z "${rp}" || "${rp}" == "@loader_path/../Frameworks" ]] && continue
+    install_name_tool -delete_rpath "${rp}" "${bin}" 2>/dev/null || true
+  done < <(read_rpaths "${bin}")
+  if ! read_rpaths "${bin}" | grep -Fxq '@loader_path/../Frameworks'; then
+    install_name_tool -add_rpath '@loader_path/../Frameworks' "${bin}" 2>/dev/null || true
+  fi
+}
+
+bundle_binary() {
+  local bin="$1" dep name src
+  codesign --remove-signature "${bin}" 2>/dev/null || true
+  normalise_rpaths "${bin}"
+  while IFS= read -r dep; do
+    [[ -z "${dep}" ]] && continue
+    case "${dep}" in /System/*|/usr/lib/*|/usr/lib) continue ;; esac
+    name="${dep##*/}"
+    case ";${copied};" in *";${name};"*) continue ;; esac
+    if [[ "${dep}" == @rpath/* ]]; then
+      src="$(find "${project_root}/build" -name "${name}" -print -quit 2>/dev/null || true)"
+    elif [[ -f "${dep}" ]]; then
+      src="${dep}"
+    else
+      src="$(find "${project_root}/build" -name "${name}" -print -quit 2>/dev/null || true)"
+    fi
+    if [[ -z "${src}" ]]; then
+      echo "error: cannot resolve dependency ${dep} of ${bin}" >&2
+      exit 3
+    fi
+    cp -L -f "${src}" "${frameworks_dir}/${name}"
+    chmod u+w "${frameworks_dir}/${name}"
+    codesign --remove-signature "${frameworks_dir}/${name}" 2>/dev/null || true
+    install_name_tool -id "@rpath/${name}" "${frameworks_dir}/${name}" 2>/dev/null || true
+    install_name_tool -change "${dep}" "@rpath/${name}" "${bin}" 2>/dev/null || true
+    copied="${copied}${name};"
+    bundle_binary "${frameworks_dir}/${name}"
+  done < <(otool -L "${bin}" | tail -n +2 | sed -E 's/^[[:space:]]+([^[:space:]]+).*/\1/')
+}
+
+echo "    bundling dylibs"
+bundle_binary "${macos_dir}/gk"
+
+# --- data/ -------------------------------------------------------------------
+# try_get_data_dir() (common/util/FileUtil.cpp) looks for a "data" directory
+# BESIDE the executable and, when found, uses it as get_jak_project_dir().
+# Everything below was verified empirically by booting from outside the repo;
+# a purely static reading of the source misses the shaders directory.
+echo "    copying data (this is the slow part)"
+mkdir -p "${data_dir}/game/assets" \
+         "${data_dir}/game/graphics/opengl_renderer" \
+         "${data_dir}/goal_src" \
+         "${data_dir}/out"
+
+cp -R "${project_root}/game/graphics/opengl_renderer/shaders" \
+      "${data_dir}/game/graphics/opengl_renderer/"
+cp -R "${project_root}/game/assets/fonts"    "${data_dir}/game/assets/"
+cp -R "${project_root}/game/assets/${game}"  "${data_dir}/game/assets/"
+cp    "${project_root}/game/assets/sdl_controller_db.txt" "${data_dir}/game/assets/"
+cp -R "${project_root}/goal_src/user"        "${data_dir}/goal_src/"
+
+# The compiled game data. get_game_output_dir() appends "-arm64" on Apple
+# Silicon, so the directory name inside the bundle must keep that suffix.
+cp -R "${out_tree}" "${data_dir}/out/${game}-arm64"
+
+# gk writes log/<timestamp>.log and imgui.ini through get_file_path(), i.e.
+# INSIDE the data dir. Any file created inside a signed .app invalidates its
+# seal ("file added: ..."), and that happens on the very first run no matter
+# where in the bundle data/ lives — Contents/Resources is sealed too. Symlink
+# both out to the user's Application Support directory, which is where settings
+# and saves already go, so nothing is ever written into the bundle itself.
+support_dir="${HOME}/Library/Application Support/OpenGOAL/${game}"
+mkdir -p "${support_dir}/log"
+touch "${support_dir}/imgui.ini"
+ln -sfn "${support_dir}/log"        "${data_dir}/log"
+ln -sfn "${support_dir}/imgui.ini"  "${data_dir}/imgui.ini"
+
+# --- launcher ----------------------------------------------------------------
+# CFBundleExecutable. Finder starts apps with cwd=/, so set it explicitly and
+# exec the real binary with the retail flag set (no -v / -debug).
+# gk writes log/ and imgui.ini via get_file_path(), i.e. relative to
+# get_jak_project_dir() — the data dir, NOT the cwd. If data/ sits inside
+# Contents/MacOS it is treated as sealed code, so the first run invalidates the
+# signature ("a sealed resource is missing or invalid"). Keeping data/ in
+# Contents/Resources and pointing at it with --proj-path avoids that: Resources
+# is sealed as data, and the runtime-written files live under a directory the
+# launcher creates. --proj-path takes precedence over the beside-the-executable
+# data/ probe in setup_project_path().
+cat > "${macos_dir}/launcher" <<'LAUNCHER'
+#!/bin/bash
+here="$(cd "$(dirname "$0")" && pwd)"
+data="$(cd "${here}/../Resources/data" && pwd)"
+mkdir -p "${data}/log"
+exec "${here}/gk" --proj-path "${data}" --game __GAME__ -- -boot -fakeiso
+LAUNCHER
+sed -i '' "s/__GAME__/${game}/" "${macos_dir}/launcher"
+chmod +x "${macos_dir}/launcher"
+
+# --- Info.plist --------------------------------------------------------------
+# CFBundleIdentifier also clears gk's "No bundle id found" startup message.
+cat > "${contents}/Info.plist" <<PLIST
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>CFBundleName</key><string>${app_name}</string>
+  <key>CFBundleDisplayName</key><string>${app_name}</string>
+  <key>CFBundleIdentifier</key><string>${bundle_id}</string>
+  <key>CFBundleVersion</key><string>1.0</string>
+  <key>CFBundleShortVersionString</key><string>1.0</string>
+  <key>CFBundlePackageType</key><string>APPL</string>
+  <key>CFBundleExecutable</key><string>launcher</string>
+  <key>CFBundleIconFile</key><string>AppIcon</string>
+  <key>NSHighResolutionCapable</key><true/>
+  <key>LSMinimumSystemVersion</key><string>11.0</string>
+</dict>
+</plist>
+PLIST
+
+# --- icon (optional) ---------------------------------------------------------
+# The game ships its own 256px app icon; no extra art needed.
+icon_src="${project_root}/game/assets/${game}/app256.png"
+if [[ -f "${icon_src}" ]] && command -v iconutil >/dev/null 2>&1; then
+  work="$(mktemp -d)"
+  iconset="${work}/AppIcon.iconset"
+  mkdir -p "${iconset}"
+  for size in 16 32 128 256 512; do
+    sips -z ${size} ${size}     "${icon_src}" --out "${iconset}/icon_${size}x${size}.png"      >/dev/null 2>&1
+    sips -z $((size*2)) $((size*2)) "${icon_src}" --out "${iconset}/icon_${size}x${size}@2x.png" >/dev/null 2>&1
+  done
+  iconutil -c icns "${iconset}" -o "${contents}/Resources/AppIcon.icns" 2>/dev/null || true
+  rm -rf "${work}"
+fi
+
+# --- verify self-containment -------------------------------------------------
+# This gate exists because the first bundle built by this script LOOKED correct
+# (it ran, it was signed) while silently resolving every dylib out of the repo's
+# build/ tree. It would have broken the moment the checkout moved. Fail loudly
+# rather than ship that again.
+echo "    verifying self-containment"
+leaks=0
+while IFS= read -r bin; do
+  if otool -l "${bin}" 2>/dev/null | grep -Fq "${project_root}"; then
+    echo "error: ${bin##*/} still references ${project_root}" >&2
+    leaks=$((leaks+1))
+  fi
+done < <(printf '%s\n' "${macos_dir}/gk"; find "${frameworks_dir}" -name '*.dylib' 2>/dev/null)
+if [[ ${leaks} -gt 0 ]]; then
+  echo "error: bundle is not self-contained (${leaks} binaries reference the checkout)" >&2
+  exit 3
+fi
+# data/ must hold real files, not links back into the checkout. The only two
+# permitted links are the deliberate log/ and imgui.ini redirects created above,
+# which point into Application Support to keep runtime writes out of the bundle.
+stray_links="$(find "${data_dir}" -type l 2>/dev/null \
+  | grep -v -e "^${data_dir}/log$" -e "^${data_dir}/imgui.ini$" || true)"
+if [[ -n "${stray_links}" ]]; then
+  echo "error: unexpected symlinks in data/:" >&2
+  printf '  %s\n' ${stray_links} >&2
+  exit 3
+fi
+
+# --- sign --------------------------------------------------------------------
+# Sign AFTER all install_name_tool edits and the icon, or the signature is stale.
+echo "    signing (ad-hoc)"
+codesign --force --deep -s - "${app}" 2>/dev/null
+codesign -v "${app}" 2>/dev/null || { echo "error: signature invalid" >&2; exit 3; }
+
+echo "==> ${app}"
+echo "    size: $(du -sh "${app}" | cut -f1)"
+codesign -dv "${app}" 2>&1 | grep -E "Signature|Identifier" | sed 's/^/    /' || true
