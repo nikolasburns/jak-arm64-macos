@@ -17,6 +17,7 @@
 #include "common/util/FileUtil.h"
 #include "common/util/font/dbs/font_db_jak1.h"
 #include "common/util/font/dbs/font_db_jak2.h"
+#include "common/util/font/dbs/font_db_jak3.h"
 #include "common/util/font/font_utils_korean.h"
 #include "common/util/string_util.h"
 #include "common/versions/versions.h"
@@ -31,12 +32,14 @@ void from_json(const json& j, KoreanLookupEntry& obj) {
 std::map<GameTextVersion, GameTextFontBank*> g_font_banks = {
     {GameTextVersion::JAK1_V1, &g_font_bank_jak1_v1},
     {GameTextVersion::JAK1_V2, &g_font_bank_jak1_v2},
-    {GameTextVersion::JAK2, &g_font_bank_jak2}};
+    {GameTextVersion::JAK2, &g_font_bank_jak2},
+    {GameTextVersion::JAK3, &g_font_bank_jak3}};
 
 const std::unordered_map<std::string, GameTextVersion> sTextVerEnumMap = {
     {"jak1-v1", GameTextVersion::JAK1_V1},
     {"jak1-v2", GameTextVersion::JAK1_V2},
-    {"jak2", GameTextVersion::JAK2}};
+    {"jak2", GameTextVersion::JAK2},
+    {"jak3", GameTextVersion::JAK3}};
 
 const std::string& get_text_version_name(GameTextVersion version) {
   for (auto& [name, ver] : sTextVerEnumMap) {
@@ -80,8 +83,11 @@ GameTextFontBank* get_font_bank_from_game_version(GameVersion version) {
     // Jak 1 has been patched to use V2
     return get_font_bank(GameTextVersion::JAK1_V2);
   }
+  if (version == GameVersion::Jak3) {
+    return get_font_bank(GameTextVersion::JAK3);
+  }
   ASSERT_MSG(version == GameVersion::Jak2,
-             "This snapshot only provides the Jak 1 and Jak 2 font banks");
+             "This snapshot only provides the Jak 1, Jak 2 and Jak 3 font banks");
   return get_font_bank(GameTextVersion::JAK2);
 }
 

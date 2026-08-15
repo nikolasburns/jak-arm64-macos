@@ -75,6 +75,9 @@
     ((eq? GAME_VERSION 'jak1)
      `(m "decompiler/config/jak1/all-types.gc")
      )
+    ((eq? GAME_VERSION 'jak3)
+     `(m "decompiler/config/jak3/all-types.gc")
+     )
     (#t
      `(m "decompiler/config/jak2/all-types.gc")
      )
@@ -1286,5 +1289,8 @@
    )
   ((eq? GAME_VERSION 'jak2)
    (asm-file "goal_src/jak2/compiler-setup.gc")
+   )
+  ((eq? GAME_VERSION 'jak3)
+   (asm-file "goal_src/jak3/compiler-setup.gc")
    )
   )

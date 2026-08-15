@@ -89,6 +89,7 @@ add_library(common
         util/FileUtil.cpp
         util/font/dbs/font_db_jak1.cpp
         util/font/dbs/font_db_jak2.cpp
+        util/font/dbs/font_db_jak3.cpp
         util/font/font_utils_korean.cpp
         util/font/font_utils.cpp
         util/FrameLimiter.cpp

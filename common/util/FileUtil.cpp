@@ -278,6 +278,8 @@ fs::path get_iso_dir_for_game(GameVersion game_version) {
   std::string expected_subdir = "jak1";
   if (game_version == GameVersion::Jak2) {
     expected_subdir = "jak2";
+  } else if (game_version == GameVersion::Jak3) {
+    expected_subdir = "jak3";
   }
   const auto temp_dir = get_jak_project_dir() / "iso_data" / expected_subdir;
   if (fs::exists(temp_dir)) {

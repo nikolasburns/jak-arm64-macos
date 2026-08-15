@@ -34,6 +34,12 @@ add_library(compiler
         build_level/common/Tfrag.cpp
         build_level/common/Tie.cpp
         build_level/jak2/Region.cpp
+        build_level/jak3/build_level.cpp
+        build_level/collide/jak3/collide.cpp
+        build_level/jak3/Entity.cpp
+        build_level/jak3/FileInfo.cpp
+        build_level/jak3/LevelFile.cpp
+        build_level/jak3/Region.cpp
         compiler/Compiler.cpp
         compiler/Env.cpp
         compiler/Val.cpp
@@ -64,6 +70,7 @@ add_library(compiler
         build_actor/common/build_actor.cpp
         build_actor/jak1/build_actor.cpp
         build_actor/jak2/build_actor.cpp
+        build_actor/jak3/build_actor.cpp
         debugger/Debugger.cpp
         debugger/DebugInfo.cpp
         debugger/DebugServer.cpp

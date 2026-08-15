@@ -10,6 +10,7 @@
 #include "game/graphics/pipelines/opengl.h"
 #include "game/graphics/texture/jak1_tpage_dir.h"
 #include "game/graphics/texture/jak2_tpage_dir.h"
+#include "game/graphics/texture/jak3_tpage_dir.h"
 
 #include "fmt/format.h"
 #include "third-party/imgui/imgui.h"
@@ -312,6 +313,8 @@ const std::vector<u32>& get_tpage_dir(GameVersion version) {
       return get_jak1_tpage_dir();
     case GameVersion::Jak2:
       return get_jak2_tpage_dir();
+    case GameVersion::Jak3:
+      return get_jak3_tpage_dir();
     default:
       ASSERT(false);
       return get_jak2_tpage_dir();
@@ -398,6 +401,8 @@ PcTextureId TexturePool::allocate_pc_port_texture(GameVersion version) {
       return PcTextureId(get_jak1_tpage_dir().size() - 1, m_next_pc_texture_to_allocate++);
     case GameVersion::Jak2:
       return PcTextureId(get_jak2_tpage_dir().size() - 1, m_next_pc_texture_to_allocate++);
+    case GameVersion::Jak3:
+      return PcTextureId(get_jak3_tpage_dir().size() - 1, m_next_pc_texture_to_allocate++);
     default:
       ASSERT_NOT_REACHED();
       return PcTextureId(get_jak2_tpage_dir().size() - 1, m_next_pc_texture_to_allocate++);
