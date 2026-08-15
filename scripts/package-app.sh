@@ -209,21 +209,34 @@ cp -R "${out_tree}" "${data_dir}/out/${game}-arm64"
 # gk writes log/<timestamp>.log and imgui.ini through get_file_path(), i.e.
 # INSIDE the data dir. Any file created inside a signed .app invalidates its
 # seal ("file added: ..."), and that happens on the very first run no matter
-# where in the bundle data/ lives — Contents/Resources is sealed too. Symlink
-# both out to the user's Application Support directory, which is where settings
-# and saves already go, so nothing is ever written into the bundle itself.
+# where in the bundle data/ lives — Contents/Resources is sealed too.
+#
+# These are therefore redirected out of the bundle — but the redirect is created
+# by the LAUNCHER at runtime, never here. Baking a symlink to
+# /Users/<builder>/Library/... into the bundle makes it dangle on every other
+# Mac: logging then fails with "File exists" on the broken link and the runtime
+# exits before reaching the title screen. The launcher resolves $HOME on the
+# machine actually running the app.
+#
 # Resolve the REAL user's home: under `sudo` (needed to write /Applications)
-# $HOME is /var/root, which would point these links at root's home and hide the
-# player's saves. SUDO_USER is set only when actually running under sudo.
+# $HOME is /var/root, which would seed these links from root's home.
 if [[ -n "${SUDO_USER:-}" ]]; then
   real_home="$(dscl . -read "/Users/${SUDO_USER}" NFSHomeDirectory 2>/dev/null | awk '{print $2}')"
   : "${real_home:=/Users/${SUDO_USER}}"
 else
   real_home="${HOME}"
 fi
+
+# The links are created HERE so they exist when the bundle is signed (an entry
+# that appears later would be "file added: ..." and break the seal). Their
+# target is this machine's home, which is wrong on any other Mac — so the
+# launcher re-points them at run time using the running user's $HOME. Rewriting
+# a symlink in place does NOT invalidate the signature; only adding or removing
+# an entry does. Both halves are required: sign-time creation for the seal,
+# run-time retargeting for portability.
 support_dir="${real_home}/Library/Application Support/OpenGOAL/${game}"
 mkdir -p "${support_dir}/log"
-touch "${support_dir}/imgui.ini"
+[ -e "${support_dir}/imgui.ini" ] || : > "${support_dir}/imgui.ini"
 if [[ -n "${SUDO_USER:-}" ]]; then
   chown -R "${SUDO_USER}" "${real_home}/Library/Application Support/OpenGOAL" 2>/dev/null || true
 fi
@@ -245,7 +258,20 @@ cat > "${macos_dir}/launcher" <<'LAUNCHER'
 #!/bin/bash
 here="$(cd "$(dirname "$0")" && pwd)"
 data="$(cd "${here}/../Resources/data" && pwd)"
-mkdir -p "${data}/log"
+
+# gk writes log/ and imgui.ini inside the data dir (get_file_path resolves them
+# against the project dir, not the cwd, and no CLI flag relocates the log dir).
+# Writing into a signed .app invalidates its seal, so both are redirected into
+# Application Support. This must happen HERE, at run time, using the running
+# machine's $HOME — a symlink baked in at package time points at the build
+# machine's home directory and dangles everywhere else, which makes logging fail
+# with "File exists" and the app quit before the title screen.
+support="${HOME}/Library/Application Support/OpenGOAL/__GAME__"
+mkdir -p "${support}/log"
+[ -e "${support}/imgui.ini" ] || : > "${support}/imgui.ini"
+ln -sfn "${support}/log"       "${data}/log"       2>/dev/null || true
+ln -sfn "${support}/imgui.ini" "${data}/imgui.ini" 2>/dev/null || true
+
 exec "${here}/gk" --proj-path "${data}" --game __GAME__ -- -boot -fakeiso
 LAUNCHER
 sed -i '' "s/__GAME__/${game}/" "${macos_dir}/launcher"
