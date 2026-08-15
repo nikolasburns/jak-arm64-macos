@@ -232,3 +232,35 @@ TEST(TargetArch, LevelHeapMultiplierCoversMeasuredDgoGrowth) {
         << fmt::format("{}", fmt::join(over, "\n"));
   }
 }
+
+// jak3 level-heap budget tripwire.
+//
+// The level heap is carved out of the global heap in one kmalloc. Raising
+// DEBUG_LEVEL_HEAP_MULT far enough makes that allocation fail outright, and the failure looks
+// nothing like a sizing problem: the level heap never exists, so the boot dies early with an
+// unrelated-looking "kmalloc: !alloc mem heap" long before any level loads.
+//
+// Measured at runtime (session 18): when the level heap is allocated, the global heap is
+// 116,114,144 bytes with 63,687,464 already used, leaving 52,426,680 free. 3.00x wants
+// 56,512,512 and is REFUSED; 2.75x wants 51,803,136 and fits. Pin the ceiling so a future
+// multiplier bump fails here with the arithmetic spelled out instead of at boot.
+TEST(TargetArch, Jak3LevelHeapFitsGlobalHeapBudget) {
+  const auto mult = read_arm64_heap_mult("jak3");
+  if (!mult) {
+    return;
+  }
+  // Mirrors level.gc: LEVEL_PAGE_SIZE = 126 KB, NUM_LEVEL_PAGES = 146.
+  constexpr int kLevelPageSize = 126 * 1024;
+  constexpr int kNumLevelPages = 146;
+  // Measured free space in the global heap at the moment the level heap is kmalloc'd.
+  constexpr double kMeasuredFreeBytes = 52426680.0;
+
+  const double page_size = kLevelPageSize * *mult;
+  const double heap_size = page_size * kNumLevelPages;
+
+  EXPECT_LE(heap_size, kMeasuredFreeBytes)
+      << "jak3 DEBUG_LEVEL_HEAP_MULT = " << *mult << " needs " << static_cast<long>(heap_size)
+      << " bytes for the level heap, but only " << static_cast<long>(kMeasuredFreeBytes)
+      << " bytes of global heap were free when it is allocated (measured at runtime). The "
+         "level-heap kmalloc will fail and the boot will die before any level loads.";
+}
