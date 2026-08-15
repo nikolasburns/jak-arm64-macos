@@ -5,6 +5,7 @@ set -euo pipefail
 #
 #   scripts/package-app.sh jak1 [output_dir]
 #   scripts/package-app.sh jak2 [output_dir]
+#   scripts/package-app.sh jak3 [output_dir]
 #
 # The bundle embeds the compiled game data from out/<game>-arm64, so it runs
 # with no dependency on this checkout. That data is derived from the user's own
@@ -15,7 +16,7 @@ set -euo pipefail
 
 usage() {
   cat >&2 <<USAGE
-usage: $0 {jak1|jak2} [output_dir] [--no-bundle-deps]
+usage: $0 {jak1|jak2|jak3} [output_dir] [--no-bundle-deps]
 
   output_dir          where to write the .app (default: /Applications)
   --no-bundle-deps    skip dylib packaging. Faster, but the bundle then runs
@@ -38,7 +39,7 @@ for arg in "$@"; do
     --no-bundle-deps) bundle_deps=0 ;;
     -h|--help)        usage ;;
     -*)               echo "error: unknown option ${arg}" >&2; usage ;;
-    jak1|jak2)        game="${arg}" ;;
+    jak1|jak2|jak3)   game="${arg}" ;;
     *)                output_dir="${arg}" ;;
   esac
 done
@@ -50,6 +51,7 @@ project_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 case "${game}" in
   jak1) app_name="Jak 1";     bundle_id="dev.nboily.jak1" ;;
   jak2) app_name="Jak 2";     bundle_id="dev.nboily.jak2" ;;
+  jak3) app_name="Jak 3";     bundle_id="dev.nboily.jak3" ;;
 esac
 
 app="${output_dir}/${app_name}.app"
