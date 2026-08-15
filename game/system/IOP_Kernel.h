@@ -25,6 +25,15 @@ struct sceSifQueueData;
 
 using time_stamp = std::chrono::time_point<std::chrono::steady_clock, std::chrono::microseconds>;
 
+/*!
+ * Convert elapsed microseconds to the IOP's 36.864 MHz tick count, as a u32.
+ *
+ * Split out of IOP_Kernel::GetSystemTimeLow so the conversion can be tested without
+ * having to wait on a wall clock. See the definition in IOP_Kernel.cpp for why this
+ * arithmetic must stay in the integer domain.
+ */
+u32 iop_micros_to_ticks(s64 micros);
+
 struct SifRpcCommand {
   bool started = true;
   bool finished = true;

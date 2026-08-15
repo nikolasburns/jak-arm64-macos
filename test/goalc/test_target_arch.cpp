@@ -8,6 +8,8 @@
 
 #include "common/util/FileUtil.h"
 
+#include "game/system/IOP_Kernel.h"
+
 #include "goalc/emitter/InstructionSet.h"
 #include "goalc/make/MakeSystem.h"
 
@@ -263,4 +265,71 @@ TEST(TargetArch, Jak3LevelHeapFitsGlobalHeapBudget) {
       << " bytes for the level heap, but only " << static_cast<long>(kMeasuredFreeBytes)
       << " bytes of global heap were free when it is allocated (measured at runtime). The "
          "level-heap kmalloc will fail and the boot will die before any level loads.";
+}
+
+// The IOP system clock must WRAP, not saturate (session 20, Bug F).
+//
+// IOP_Kernel::GetSystemTimeLow reports elapsed time as a u32 count of 36.864 MHz ticks,
+// exactly as the PS2's IOP hardware counter does. Its consumers rely on that register
+// wrapping: game/overlord/jak3/spustreams.cpp compares timestamps with modular subtraction
+// (`(u32)(now - then) < delay`), which is only correct if `now` wraps past 2^32 the way the
+// hardware counter does.
+//
+// The original implementation computed `delta_time.count() * 36.864` -- an int64 times a
+// double, yielding a DOUBLE that was then implicitly converted to u32. Converting a double
+// whose value is outside u32's range is UNDEFINED BEHAVIOUR, and the two architectures we
+// build for disagree about it:
+//   x86-64 `cvttsd2si` wraps  -> harmless, which is why this never showed up on x86.
+//   ARM64   `fcvtzu`   SATURATES -> every value >= 2^32 becomes 0xFFFFFFFF, permanently.
+// 2^32 ticks / 36.864 MHz = 116.5 SECONDS of runtime, after which the clock froze at
+// 0xFFFFFFFF on ARM64. Modular subtraction against a frozen clock yields 0 forever, so
+// BlockUntilVoiceSafe (spustreams.cpp:1047) spun without yielding, the IOP coroutine never
+// returned, the sound RPC never completed, and the game hung. Measured: a jak3 playtest hung
+// at 119 s.
+//
+// The fix does the scaling in the integer domain (36.864 == 4608/125 exactly), which removes
+// the UB entirely rather than clamping it, and wraps mod 2^32 on every architecture.
+//
+// NOTE TO A FUTURE READER: the wraparound below is CORRECT AND REQUIRED -- it is the
+// hardware semantic the consumers are written against. Do not "fix" it by widening the
+// return type, clamping, or reintroducing floating point.
+TEST(TargetArch, IopSystemClockWrapsInsteadOfSaturating) {
+  // 2^32 ticks / 36.864 ticks-per-microsecond = the exact wrap point, in microseconds.
+  constexpr s64 kWrapMicros = 116508444;  // floor(2^32 / 36.864)
+
+  // Just before the wrap the clock must still be counting normally. 116e6 * 36.864 is
+  // exactly 4,276,224,000. Note the old floating-point form returned 4,276,223,999 here:
+  // 36.864 is not representable in binary, so the product came out as 4276223999.9999995
+  // and truncated one tick low. The integer form is exact, so it is also strictly MORE
+  // accurate than the code it replaced -- not merely safer.
+  EXPECT_EQ(iop_micros_to_ticks(116000000), 4276224000u)
+      << "the IOP clock must still be counting at 116 s (before the 2^32 wrap)";
+
+  // Well past the wrap the value must NOT be pinned at 0xFFFFFFFF. This is the assertion
+  // that fails on ARM64 with the original floating-point conversion.
+  const u32 at_120s = iop_micros_to_ticks(120000000);
+  EXPECT_NE(at_120s, 0xFFFFFFFFu)
+      << "the IOP clock SATURATED at 120 s instead of wrapping. On ARM64 an out-of-range "
+         "double->u32 conversion saturates (fcvtzu), freezing the clock forever and "
+         "deadlocking the overlord's voice spin loops.";
+
+  const u32 at_1000s = iop_micros_to_ticks(1000000000);
+  EXPECT_NE(at_1000s, 0xFFFFFFFFu) << "the IOP clock is still pinned at 0xFFFFFFFF at 1000 s";
+
+  // The clock must keep ADVANCING after the wrap, not stick at any single value.
+  EXPECT_NE(at_120s, at_1000s)
+      << "the IOP clock stopped advancing after wrapping; modular timestamp comparisons in "
+         "game/overlord/jak3/spustreams.cpp will never make progress";
+
+  // Exact modular arithmetic: 36.864 == 4608/125, so the tick count is exactly
+  // (micros * 4608 / 125) mod 2^32. Check a value chosen to land past the wrap.
+  const u64 exact_120s = (120000000ull * 4608ull) / 125ull;
+  EXPECT_EQ(at_120s, static_cast<u32>(exact_120s))
+      << "the wrapped value must equal the exact integer tick count mod 2^32";
+
+  // And the wrap point itself behaves: one microsecond of extra elapsed time must not
+  // produce a smaller-by-more-than-wrap jump.
+  EXPECT_EQ(iop_micros_to_ticks(kWrapMicros * 2),
+            static_cast<u32>((static_cast<u64>(kWrapMicros) * 2ull * 4608ull) / 125ull))
+      << "the clock must wrap cleanly at multiples of the 2^32 boundary";
 }
