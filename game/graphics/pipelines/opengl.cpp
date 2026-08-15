@@ -734,6 +734,24 @@ void render_game_frame(int game_width,
       options.msaa_samples = msaa_max;
     }
 
+    // MSAA is disabled on ANGLE: the resolve blit in do_pcrtc_effects faults inside
+    // ANGLE's Metal backend (AGXMetalG16X drawIndexedPrimitives, offset-from-null),
+    // and nothing renders at all when it does. Forcing 1 sample takes the
+    // resolve_buffer branch out of the frame entirely and gives a correct, if
+    // unantialiased, picture -- which is strictly better than no picture.
+    //
+    // Clamped here rather than at the settings source because this is the one point
+    // every path funnels through, including the internal-res screenshot override
+    // above, which sets msaa_samples independently of the global setting.
+    //
+    // The single-sampled path is well-exercised on GLES: it is a plain texture
+    // attachment with no resolve step, and it is what jak2 shipped on during the
+    // call-site audit. Revisit if the resolve is fixed; see the MSAA RESOLVE item
+    // in the work log for the captured blit parameters.
+    if (gfx_backend_is_angle()) {
+      options.msaa_samples = 1;
+    }
+
     if constexpr (run_dma_copy) {
       auto& chain = g_gfx_data->dma_copier.get_last_result();
       g_gfx_data->ogl_renderer.render(DmaFollower(chain.data.data(), chain.start_offset), options);
