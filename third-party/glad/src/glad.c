@@ -2203,6 +2203,7 @@ static void find_coreGL(void) {
      * https://github.com/glfw/glfw/blob/master/src/context.c#L36
      */
     int i, major, minor;
+    int is_gles = 0;
 
     const char* version;
     const char* prefixes[] = {
@@ -2219,6 +2220,7 @@ static void find_coreGL(void) {
         const size_t length = strlen(prefixes[i]);
         if (strncmp(version, prefixes[i], length) == 0) {
             version += length;
+            is_gles = 1;
             break;
         }
     }
@@ -2229,6 +2231,20 @@ static void find_coreGL(void) {
 #else
     sscanf(version, "%d.%d", &major, &minor);
 #endif
+
+    /* OpenGOAL: GLES reports a lower version number than the desktop GL whose
+     * functionality it actually provides. GLES 3.0 covers the core of desktop
+     * GL through 3.3 -- uniform buffer objects (GL 3.1), sync objects (3.2),
+     * sampler objects and instanced attribute divisors (3.3) -- but calls
+     * itself "3.0". Because every load_GL_VERSION_x_y table below is gated on
+     * the parsed number, an unmapped GLES 3.0 string loads only up to 3.0 and
+     * leaves the rest of the pointers NULL, which crashes at the first call
+     * rather than at load time.
+     *
+     * is_gles is set above when a GLES prefix was stripped from the string. */
+    if (is_gles && major == 3) {
+        minor = 3;
+    }
 
     GLVersion.major = major; GLVersion.minor = minor;
     max_loaded_major = major; max_loaded_minor = minor;

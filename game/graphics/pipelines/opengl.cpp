@@ -320,8 +320,23 @@ static std::shared_ptr<GfxDisplay> gl_make_display(int width,
   if (!gl_inited) {
     {
       auto p = scoped_prof("startup::sdl::glad_init");
-      gladLoadGLLoader((GLADloadproc)SDL_GL_GetProcAddress);
-      if (!gladLoadGL()) {
+      // Load the entry points through SDL, which resolves them against whichever
+      // GL the context actually belongs to: AppleGL on the desktop path, ANGLE's
+      // libGLESv2 on the ANGLE path.
+      //
+      // The GLES version-number mapping that makes this loader cover GL 3.1-3.3
+      // lives in find_coreGL (third-party/glad/src/glad.c).
+      bool glad_ok = gladLoadGLLoader((GLADloadproc)SDL_GL_GetProcAddress) != 0;
+      if (!gfx_backend_is_angle()) {
+        // Desktop path unchanged. gladLoadGL() must NOT run on the ANGLE path:
+        // its no-argument form dlopen()s OpenGL.framework itself (glad.c:89) and
+        // re-binds every pointer by dlsym, discarding what the loader above
+        // installed. Its third statement is then glGetString(GL_VERSION) -- now
+        // AppleGL's, called with an EGL context current and no CGL context at
+        // all, which segfaults inside libGL.dylib before it can return.
+        glad_ok = gladLoadGL();
+      }
+      if (!glad_ok) {
         lg::error("GL init fail");
         dialogs::create_error_message_dialog("Critical Error Encountered",
                                              "Unable to initialize OpenGL API.\nOpenGOAL requires "
