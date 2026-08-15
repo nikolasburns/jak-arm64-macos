@@ -369,9 +369,34 @@ if [[ ${bundle_deps} -eq 1 ]]; then
     fi
   done < <(find "${frameworks_dir}" -name '*.dylib' 2>/dev/null)
 fi
+# gk is a JIT: common/jit_memory.h maps executable pages with MAP_JIT, and the
+# build hard-errors without it. A signed binary may only use MAP_JIT if it
+# carries com.apple.security.cs.allow-jit. Omitting the entitlement produces a
+# bundle that runs on the machine that signed it but is KILLED AT LAUNCH
+# elsewhere — it bounces in the Dock and exits with no crash report, because the
+# refusal happens before any of our code runs. CMake only wires this file into
+# the Xcode generator, so a Ninja build never gets it and the packaging step
+# must apply it itself.
+entitlements="${project_root}/game/macos/jak-jit.entitlements"
+if [[ ! -f "${entitlements}" ]]; then
+  echo "error: missing ${entitlements}; the bundle would not launch on another Mac" >&2
+  exit 3
+fi
+
+# Order matters and --deep must NOT be used here. The entitlement belongs on the
+# Mach-O binary, not the bundle (CFBundleExecutable is a shell script, and
+# codesign cannot attach entitlements to a script). A --deep pass on the bundle
+# re-signs gk and silently drops the entitlement, while signing gk AFTER the
+# bundle invalidates the outer seal. So: dylibs, then gk with entitlements, then
+# the bundle alone.
+if ! codesign --force --entitlements "${entitlements}" -s - "${macos_dir}/gk" 2>/dev/null; then
+  echo "error: failed to sign gk with the JIT entitlement" >&2
+  exit 3
+fi
+
 sign_ok=0
 for attempt in 1 2 3; do
-  sign_out="$(codesign --force --deep -s - "${app}" 2>&1)" && sign_rc=0 || sign_rc=$?
+  sign_out="$(codesign --force -s - "${app}" 2>&1)" && sign_rc=0 || sign_rc=$?
   [[ -n "${sign_out}" ]] && printf '      %s\n' "${sign_out}"
   if [[ ${sign_rc} -eq 0 ]]; then
     verify_out="$(codesign -v "${app}" 2>&1)" && verify_rc=0 || verify_rc=$?
@@ -388,6 +413,18 @@ if [[ ${sign_ok} -ne 1 ]]; then
   echo "error: could not produce a valid signature for ${app}" >&2
   exit 3
 fi
+
+# The JIT entitlement must actually be present in the signature. Without it the
+# app launches here and dies silently on every other Mac, which is the hardest
+# class of bug to notice from the build machine.
+# Verify on gk itself, not the bundle: the bundle's CFBundleExecutable is the
+# launcher script and never carries entitlements.
+if ! codesign -d --entitlements - --xml "${macos_dir}/gk" 2>/dev/null | grep -q "allow-jit"; then
+  echo "error: gk is missing com.apple.security.cs.allow-jit" >&2
+  echo "       the app would bounce in the Dock and quit on any other Mac" >&2
+  exit 3
+fi
+echo "      JIT entitlement present on gk"
 
 echo "==> ${app}"
 echo "    size: $(du -sh "${app}" | cut -f1)"
