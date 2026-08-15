@@ -1,10 +1,24 @@
 #include "fileio.h"
 
 #include <cstring>
+#include <string>
+
+#include "common/util/FileUtil.h"
 
 #include "game/kernel/common/fileio.h"
 
 namespace jak3 {
+
+namespace {
+/*!
+ * Path to a compiled .go in the game's output directory. Must go through get_game_output_dir so
+ * ARM64 builds read out/jak3-arm64/obj rather than the x86 tree.
+ */
+std::string obj_file_path(const char* name) {
+  return (file_util::get_game_output_dir(GameVersion::Jak3) / "obj" / (std::string(name) + ".go"))
+      .string();
+}
+}  // namespace
 
 // This file naming system was used only in development, as it loads files from the development PC
 // connected to the PS2 dev-kit.
@@ -106,13 +120,13 @@ char* MakeFileName(int type, const char* name, int new_string) {
       // plain GOAL data object file
     case DATA_FILE_TYPE:  // 0x20
       // sprintf(buf, "%sfinal/%s.go", prefix, name);
-      sprintf(buf, "%sout/jak3/obj/%s.go", prefix, name);
+      kstrcpy(buf, obj_file_path(name).c_str());
       break;
 
       // texture page
     case TX_PAGE_FILE_TYPE:  // 0x21
       // sprintf(buf, "%sdata/texture-page%d/%s.go", prefix, TX_PAGE_VERSION, name);
-      sprintf(buf, "%sout/jak3/obj/%s.go", prefix, name);
+      kstrcpy(buf, obj_file_path(name).c_str());
       break;
 
       // joint animation
@@ -148,7 +162,7 @@ char* MakeFileName(int type, const char* name, int new_string) {
       // Everybody's favorite "art group" file. Container of different art.
     case ART_GROUP_FILE_TYPE:  // 0x30
       // sprintf(buf, "%sfinal/art-group%d/%s-ag.go", prefix, ART_FILE_VERSION, name);
-      sprintf(buf, "%sout/jak3/obj/%s.go", prefix, name);
+      kstrcpy(buf, obj_file_path(name).c_str());
       break;
 
       // GOAL data object file containing visibility data. This likely contained the visibility data

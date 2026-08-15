@@ -19,17 +19,39 @@
 ;; room inside each level bank. Measured against a freshly built x86 tree
 ;; (2026-08-14): jak3 code objects are 2.4-2.7x their x86 size and the most
 ;; code-dense level DGOs reach 3.28x, though the MEDIAN DGO is 1.00x because
-;; arch-neutral art dominates most of them. 1.75x is the value jak1 and jak2
-;; already ship on this target and leaves ~19 MB of headroom over the largest
-;; jak3 DGO (VOCA, 13.8 MB). jak3 allocates ONE shared level heap (see the
-;; kmalloc at the bottom of this file), so the cost is 31.4 MB of the 112 MB
-;; ARM64 global heap, not LEVEL_MAX times that. Keep the x86 multiplier as-is.
-(defglobalconstant DEBUG_LEVEL_HEAP_MULT (#if ARM64_TARGET 1.75 1.2)) ;; we're gonna use debug mode-style heaps but we don't actually need them at 1.5x size right now
+;; arch-neutral art dominates most of them.
+;;
+;; 1.75x was tried first (it is what jak1 and jak2 ship) and is NOT enough for
+;; jak3. It was chosen by checking headroom against the LARGEST DGO -- but the
+;; largest DGOs are art-dominated (VOCA 13.8 MB at ratio 1.14, MIC 1.01,
+;; NSB 1.00), so they scale almost for free and prove nothing about the
+;; multiplier. The DGOs that actually overrun are the mid-size CODE-DENSE ones,
+;; whose page allocation is small. Measured failure (session 16, first jak3 boot
+;; to reach level loading):
+;;   WASALL.DGO is 2.127x (2,074,368 -> 4,412,048). It gets 16 pages, so at
+;;   1.75x its heap span is 16 * 225,792 = 3,612,672, and it needs 3,614,304 --
+;;   overrunning `turtle` (object 55 of 60) by exactly 1632 bytes. Verified at
+;;   runtime: heap base 0x3dfc850, top-base 0x416e850, turtle end 0x416eeb0.
+;;   The x86 build overruns the same 16 pages too (2,064,384 available vs
+;;   2,074,368 needed), so 16 pages is simply undersized for WASALL on BOTH
+;;   architectures; the ARM64 multiplier has to absorb that as well.
+;; 2.25x gives WASALL +1,030,560 bytes of headroom and covers 267 of the 273
+;; level DGOs by ratio. Six exceed it (LFACTORY 3.28, LWASBBV 3.27, LFACCAR
+;; 2.95, LCTYPALT 2.82, LBBSPRT2 2.33, LBBSPRT3 2.27) -- all small in absolute
+;; terms, and ratio alone does not predict an overrun (what matters is each
+;; level's page allocation versus its size). They are watch items, not known
+;; failures; scaling to cover the worst RATIO would cost 62.9 MB and waste it on
+;; every level.
+;; jak3 allocates ONE shared level heap (see the kmalloc at the bottom of this
+;; file), so the cost is 40.4 MB of the 110.7 MB ARM64 global heap, not
+;; LEVEL_MAX times that. Keep the x86 multiplier as-is.
+(defglobalconstant DEBUG_LEVEL_HEAP_MULT (#if ARM64_TARGET 2.25 1.2)) ;; we're gonna use debug mode-style heaps but we don't actually need them at 1.5x size right now
 ;; Keep the ARM64 page size integral. The float-derived value is preserved for
 ;; the existing x86 path, but using it in integer pointer arithmetic makes the
 ;; ARM64 emitter/runtime boundary ambiguous (jak2 needed this same change).
+;; 9/4 == 2.25, and LEVEL_PAGE_SIZE (129024) is divisible by 4, so this is exact.
 (defglobalconstant DEBUG_LEVEL_PAGE_SIZE
-  (#if ARM64_TARGET (/ (* LEVEL_PAGE_SIZE 7) 4)
+  (#if ARM64_TARGET (/ (* LEVEL_PAGE_SIZE 9) 4)
                     (* 1024 (* DEBUG_LEVEL_HEAP_MULT LEVEL_PAGE_SIZE_KB))))
 (defglobalconstant DEBUG_LEVEL_HEAP_SIZE (* NUM_LEVEL_PAGES DEBUG_LEVEL_PAGE_SIZE))
 

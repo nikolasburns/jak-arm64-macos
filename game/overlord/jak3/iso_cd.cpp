@@ -488,15 +488,16 @@ void CISOCDFileSystem::DvdDriverCallback(int) {
  * just search for files in the appropriate out folder.
  */
 void CISOCDFileSystem::ReadDirectory() {
-  for (const auto& f :
-       fs::directory_iterator(file_util::get_jak_project_dir() / "out" / "jak3" / "iso")) {
+  // must go through get_game_output_dir: on ARM64 the compiled objects live in out/jak3-arm64/,
+  // and serving the x86 tree here means link-and-exec jumps straight into x86 opcodes (SIGILL).
+  const auto iso_dir = file_util::get_game_output_dir(GameVersion::Jak3) / "iso";
+  for (const auto& f : fs::directory_iterator(iso_dir)) {
     if (f.is_regular_file()) {
       auto& e = g_FileDefs.emplace_back();
       std::string file_name = f.path().filename().string();
       ASSERT(file_name.length() < 16);  // should be 8.3.
       MakeISOName(&e.name, file_name.c_str());
-      e.full_path =
-          fmt::format("{}/out/jak3/iso/{}", file_util::get_jak_project_dir().string(), file_name);
+      e.full_path = (iso_dir / file_name).string();
     }
   }
 }
