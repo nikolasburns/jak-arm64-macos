@@ -894,15 +894,27 @@ Fbo make_fbo(int w, int h, int msaa, bool make_zbuf_and_stencil) {
   glBindFramebuffer(GL_FRAMEBUFFER, result.fbo_id);
   result.valid = true;
 
-  // make texture that will hold the colors of the framebuffer
-  GLuint tex;
-  glGenTextures(1, &tex);
-  result.tex_id = tex;
-  glActiveTexture(GL_TEXTURE0);
+  // make the buffer that will hold the colors of the framebuffer.
+  //
+  // A multisampled color buffer is never sampled: every reader (the display blit in
+  // do_pcrtc_effects, the internal-res screenshot) resolves it into the
+  // single-sampled resolve_buffer with glBlitFramebuffer first. So it only has to be
+  // a render target and a blit source, which a RENDERBUFFER provides -- and
+  // glRenderbufferStorageMultisample is GLES 3.0 core, whereas the multisampled
+  // TEXTURE it replaces (glTexImage2DMultisample) is GLES 3.1 and unavailable on
+  // ANGLE's Metal backend. The single-sampled path stays a texture because that one
+  // IS sampled directly.
   if (use_multisample) {
-    glBindTexture(GL_TEXTURE_2D_MULTISAMPLE, tex);
-    glTexImage2DMultisample(GL_TEXTURE_2D_MULTISAMPLE, msaa, GL_RGBA8, w, h, GL_TRUE);
+    GLuint color_rbuf;
+    glGenRenderbuffers(1, &color_rbuf);
+    result.color_rbuf_id = color_rbuf;
+    glBindRenderbuffer(GL_RENDERBUFFER, color_rbuf);
+    glRenderbufferStorageMultisample(GL_RENDERBUFFER, msaa, GL_RGBA8, w, h);
   } else {
+    GLuint tex;
+    glGenTextures(1, &tex);
+    result.tex_id = tex;
+    glActiveTexture(GL_TEXTURE0);
     glBindTexture(GL_TEXTURE_2D, tex);
     glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, w, h, 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
   }
@@ -922,9 +934,10 @@ Fbo make_fbo(int w, int h, int msaa, bool make_zbuf_and_stencil) {
   // attach texture to framebuffer as target for colors
 
   if (use_multisample) {
-    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D_MULTISAMPLE, tex, 0);
+    glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_RENDERBUFFER,
+                              *result.color_rbuf_id);
   } else {
-    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, tex, 0);
+    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, *result.tex_id, 0);
   }
 
   GLenum render_targets[1] = {GL_COLOR_ATTACHMENT0};

@@ -9,7 +9,14 @@ struct Fbo {
   GLuint fbo_id = -1;
 
   // optional rgba/zbuffer/stencil data.
+  //
+  // The color attachment is a texture when this fbo is sampled directly, and a
+  // multisampled RENDERBUFFER when it is not: a multisampled color buffer is only
+  // ever a blit source here (it must be resolved into a single-sampled fbo before
+  // anything reads it), and renderbuffer MSAA is GLES 3.0 core while multisampled
+  // TEXTURES are GLES 3.1. Exactly one of these two is set on a valid fbo.
   std::optional<GLuint> tex_id;
+  std::optional<GLuint> color_rbuf_id;
   std::optional<GLuint> zbuf_stencil_id;
 
   bool multisampled = false;
@@ -38,6 +45,11 @@ struct Fbo {
       if (tex_id) {
         glDeleteTextures(1, &tex_id.value());
         tex_id.reset();
+      }
+
+      if (color_rbuf_id) {
+        glDeleteRenderbuffers(1, &color_rbuf_id.value());
+        color_rbuf_id.reset();
       }
 
       if (zbuf_stencil_id) {
