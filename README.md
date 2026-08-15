@@ -174,13 +174,24 @@ this repository is moved or deleted, and on a Mac that never had the build tree.
 
 Dependency bundling is the default. Pass `--no-bundle-deps` to skip it for fast
 repackaging on the build machine; the script warns that the result will not
-launch anywhere else. **Copying a bundle to another Mac** additionally needs the
-quarantine flag cleared, because an ad-hoc signature plus quarantine is a
-Gatekeeper refusal:
+launch anywhere else.
+
+`gk` is a JIT, so the script signs it with `com.apple.security.cs.allow-jit`.
+Without that entitlement macOS refuses the launch outright — the icon bounces in
+the Dock and the app quits **with no crash report**, because nothing ever ran.
+Bundles produced this way have been copied to a second Apple Silicon Mac and
+launched by double-click, with no build tree, Homebrew, or developer tooling on
+it.
+
+If the first launch is blocked by Gatekeeper, approve it once in **System
+Settings → Privacy & Security**, or clear the quarantine flag:
 
 ```sh
 xattr -dr com.apple.quarantine "/Applications/Jak 1.app"
 ```
+
+Do **not** launch it with `sudo`: `$HOME` then resolves to `/var/root` and the
+runtime looks for its logs in the wrong place.
 
 Saves and settings stay in `~/Library/Application Support/OpenGOAL/<game>/`,
 shared with the plain `gk` binary, and the runtime's log and `imgui.ini` are
