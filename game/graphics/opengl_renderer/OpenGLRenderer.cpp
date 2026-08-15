@@ -1648,6 +1648,18 @@ void OpenGLRenderer::do_pcrtc_effects(float alp,
   if (m_fbo_state.resources.resolve_buffer.valid) {
     glBindFramebuffer(GL_READ_FRAMEBUFFER, m_fbo_state.render_fbo->fbo_id);
     glBindFramebuffer(GL_DRAW_FRAMEBUFFER, m_fbo_state.resources.resolve_buffer.fbo_id);
+    // This is an MSAA *resolve*: read is multisampled, draw is not. GLES 3.0 is far
+    // stricter than desktop GL about that case -- the rectangles must be identical
+    // (no scaling), the formats must match, and the filter MUST be GL_NEAREST.
+    // GL_LINEAR here is not a quality choice that GLES happens to reject; it is an
+    // explicit GL_INVALID_OPERATION, and ANGLE carries the diagnostic for it
+    // ("Invalid blit filter."). Desktop GL never complained, which is why it stood.
+    //
+    // The other two conditions already hold by construction and must keep holding:
+    // resolve_buffer is built from the same game_res_w/h as render_buffer in
+    // setup_frame(), and make_fbo() gives both GL_RGBA8. GL_NEAREST is also lossless
+    // here precisely because the rects are 1:1 -- there is no filtering to do, only
+    // the multisample resolve itself.
     glBlitFramebuffer(0,                                            // srcX0
                       0,                                            // srcY0
                       m_fbo_state.render_fbo->width,                // srcX1
@@ -1657,7 +1669,7 @@ void OpenGLRenderer::do_pcrtc_effects(float alp,
                       m_fbo_state.resources.resolve_buffer.width,   // dstX1
                       m_fbo_state.resources.resolve_buffer.height,  // dstY1
                       GL_COLOR_BUFFER_BIT,                          // mask
-                      GL_LINEAR                                     // filter
+                      GL_NEAREST                                    // filter
     );
     window_blit_src = &m_fbo_state.resources.resolve_buffer;
   } else {
