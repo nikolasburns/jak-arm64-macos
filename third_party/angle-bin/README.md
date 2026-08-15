@@ -55,6 +55,19 @@ GK_GFX_BACKEND=angle GK_ANGLE_DIR="$PWD/third_party/angle-bin" \
 **`GK_ANGLE_DIR` must be absolute.** Without `GK_GFX_BACKEND=angle` the runtime
 uses AppleGL and never touches this directory.
 
+## Patches
+
+`patches/` holds one **falsified** candidate fix, kept only as a record.
+
+| patch | targets | status |
+|---|---|---|
+| `0001-metal-invalidate-state-when-flush-ends-render-encoder.patch` | `aa192212af54` | **built, tested, DOES NOT FIX ANYTHING — do not apply** |
+
+**These dylibs are stock and should stay stock.** The crash `0001` was written to
+fix turned out to be ours, not ANGLE's: six background shaders declared a vertex
+attribute `int` while feeding it `GL_UNSIGNED_SHORT` data, which Metal rejects at
+pipeline creation. Fixed in `66d3b8b6ce`. See `diag/session312/FINDING.md`.
+
 ## Rebuilding
 
 Only needed to move to a newer ANGLE revision. ~22 min, ~12 GB checkout,
