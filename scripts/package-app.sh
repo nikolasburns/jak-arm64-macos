@@ -20,7 +20,7 @@ if [[ "${game}" != "jak1" && "${game}" != "jak2" ]]; then
 fi
 
 project_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-output_dir="${2:-${HOME}/Applications}"
+output_dir="${2:-/Applications}"
 
 case "${game}" in
   jak1) app_name="Jak 1";     bundle_id="dev.nboily.jak1" ;;
@@ -49,6 +49,14 @@ if [[ "$(lipo -archs "${src_gk}")" != "arm64" ]]; then
 fi
 if [[ ! -d "${out_tree}/iso" ]]; then
   echo "error: missing compiled data ${out_tree}/iso — run (mi) first" >&2
+  exit 2
+fi
+# /Applications is the default but is not always writable without elevation;
+# say so plainly instead of failing partway through a multi-GB copy.
+if ! mkdir -p "${output_dir}" 2>/dev/null || [[ ! -w "${output_dir}" ]]; then
+  echo "error: ${output_dir} is not writable." >&2
+  echo "       Re-run with sudo, or pass another directory:" >&2
+  echo "         $0 ${game} ~/Applications" >&2
   exit 2
 fi
 
@@ -145,9 +153,21 @@ cp -R "${out_tree}" "${data_dir}/out/${game}-arm64"
 # where in the bundle data/ lives — Contents/Resources is sealed too. Symlink
 # both out to the user's Application Support directory, which is where settings
 # and saves already go, so nothing is ever written into the bundle itself.
-support_dir="${HOME}/Library/Application Support/OpenGOAL/${game}"
+# Resolve the REAL user's home: under `sudo` (needed to write /Applications)
+# $HOME is /var/root, which would point these links at root's home and hide the
+# player's saves. SUDO_USER is set only when actually running under sudo.
+if [[ -n "${SUDO_USER:-}" ]]; then
+  real_home="$(dscl . -read "/Users/${SUDO_USER}" NFSHomeDirectory 2>/dev/null | awk '{print $2}')"
+  : "${real_home:=/Users/${SUDO_USER}}"
+else
+  real_home="${HOME}"
+fi
+support_dir="${real_home}/Library/Application Support/OpenGOAL/${game}"
 mkdir -p "${support_dir}/log"
 touch "${support_dir}/imgui.ini"
+if [[ -n "${SUDO_USER:-}" ]]; then
+  chown -R "${SUDO_USER}" "${real_home}/Library/Application Support/OpenGOAL" 2>/dev/null || true
+fi
 ln -sfn "${support_dir}/log"        "${data_dir}/log"
 ln -sfn "${support_dir}/imgui.ini"  "${data_dir}/imgui.ini"
 
@@ -200,10 +220,18 @@ if [[ -f "${icon_src}" ]] && command -v iconutil >/dev/null 2>&1; then
   work="$(mktemp -d)"
   iconset="${work}/AppIcon.iconset"
   mkdir -p "${iconset}"
+  # app256.png is 256x256, so anything above that would be an upscale. Emit only
+  # the variants the source can actually fill; macOS scales the rest down itself,
+  # which looks better than a blurry synthetic 1024.
+  src_px="$(sips -g pixelWidth "${icon_src}" 2>/dev/null | awk '/pixelWidth/{print $2}')"
+  : "${src_px:=256}"
   for size in 16 32 128 256 512; do
-    sips -z ${size} ${size}     "${icon_src}" --out "${iconset}/icon_${size}x${size}.png"      >/dev/null 2>&1
-    sips -z $((size*2)) $((size*2)) "${icon_src}" --out "${iconset}/icon_${size}x${size}@2x.png" >/dev/null 2>&1
+    [[ ${size} -le ${src_px} ]] && \
+      sips -z ${size} ${size} "${icon_src}" --out "${iconset}/icon_${size}x${size}.png" >/dev/null 2>&1
+    [[ $((size*2)) -le ${src_px} ]] && \
+      sips -z $((size*2)) $((size*2)) "${icon_src}" --out "${iconset}/icon_${size}x${size}@2x.png" >/dev/null 2>&1
   done
+  : # keep the conditional chain from tripping set -e
   iconutil -c icns "${iconset}" -o "${contents}/Resources/AppIcon.icns" 2>/dev/null || true
   rm -rf "${work}"
 fi
@@ -238,9 +266,30 @@ fi
 
 # --- sign --------------------------------------------------------------------
 # Sign AFTER all install_name_tool edits and the icon, or the signature is stale.
+# Signing a multi-GB bundle can fail transiently while the filesystem is still
+# settling; retry, and NEVER swallow the error output — an earlier version of
+# this script hid both the codesign failure and the verification failure, and
+# reported success on a completely unsigned bundle.
 echo "    signing (ad-hoc)"
-codesign --force --deep -s - "${app}" 2>/dev/null
-codesign -v "${app}" 2>/dev/null || { echo "error: signature invalid" >&2; exit 3; }
+sign_ok=0
+for attempt in 1 2 3; do
+  sign_out="$(codesign --force --deep -s - "${app}" 2>&1)" && sign_rc=0 || sign_rc=$?
+  [[ -n "${sign_out}" ]] && printf '      %s\n' "${sign_out}"
+  if [[ ${sign_rc} -eq 0 ]]; then
+    verify_out="$(codesign -v "${app}" 2>&1)" && verify_rc=0 || verify_rc=$?
+    [[ -n "${verify_out}" ]] && printf '      %s\n' "${verify_out}"
+    if [[ ${verify_rc} -eq 0 ]]; then
+      sign_ok=1
+      break
+    fi
+  fi
+  echo "      signing attempt ${attempt} failed; retrying"
+  sleep 2
+done
+if [[ ${sign_ok} -ne 1 ]]; then
+  echo "error: could not produce a valid signature for ${app}" >&2
+  exit 3
+fi
 
 echo "==> ${app}"
 echo "    size: $(du -sh "${app}" | cut -f1)"

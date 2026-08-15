@@ -143,6 +143,37 @@ Exit codes worth knowing: **132** = SIGILL (wrong-arch objects — you missed
 
 For Jak 2, substitute `jak2` throughout.
 
+## Package as a standalone `.app`
+
+Once a game compiles and runs, you can wrap it into a double-clickable macOS
+app that no longer needs this checkout:
+
+```sh
+./scripts/package-app.sh jak1        # -> /Applications/Jak 1.app
+./scripts/package-app.sh jak2        # -> /Applications/Jak 2.app
+```
+
+Pass a second argument to install somewhere else (`./scripts/package-app.sh jak1
+~/Applications`). If `/Applications` is not writable on your machine, the script
+says so up front rather than failing partway through a multi-gigabyte copy; re-run
+it with `sudo` or choose another directory.
+
+The bundle embeds the compiled game data from `out/<game>-arm64`, the OpenGL
+shaders, fonts and assets, and every non-system dylib — so it keeps working if
+this repository is moved or deleted. Saves and settings stay in
+`~/Library/Application Support/OpenGOAL/<game>/`, shared with the plain `gk`
+binary, and the runtime's log and `imgui.ini` are symlinked there too so that
+nothing is ever written inside the `.app` (which would otherwise invalidate its
+code signature on first launch).
+
+Expect **~3.7 GB** for Jak 1 and **~5.5 GB** for Jak 2 — the compiled assets
+dominate, and a texture pack pushes Jak 1 higher still. Bundles are ad-hoc signed
+(`codesign -s -`) for local use; they are **not** notarized and are not intended
+for distribution, since the embedded assets are derived from your own disc.
+
+Bundles are snapshots. After any `(mi)` or asset change, re-run the script to
+refresh them.
+
 ---
 
 ## Known issues
