@@ -199,7 +199,17 @@ it with `sudo` or choose another directory.
 
 The bundle embeds the compiled game data from `out/<game>-arm64`, the OpenGL
 shaders, fonts and assets, and every non-system dylib — so it keeps working if
-this repository is moved or deleted. Saves and settings stay in
+this repository is moved or deleted, and on a Mac that never had the build tree.
+
+Dependency bundling is the default. Pass `--no-bundle-deps` to skip it for fast
+repackaging on the build machine; the script warns that the result will not
+launch anywhere else. **Copying a bundle to another Mac** additionally needs the
+quarantine flag cleared, because an ad-hoc signature plus quarantine is a
+Gatekeeper refusal:
+
+```sh
+xattr -dr com.apple.quarantine "/Applications/Jak 1.app"
+``` Saves and settings stay in
 `~/Library/Application Support/OpenGOAL/<game>/`, shared with the plain `gk`
 binary, and the runtime's log and `imgui.ini` are symlinked there too so that
 nothing is ever written inside the `.app` (which would otherwise invalidate its

@@ -13,14 +13,39 @@ set -euo pipefail
 #
 # Signing is ad-hoc (-s -). No notarization: that would require distribution.
 
-game="${1:-}"
-if [[ "${game}" != "jak1" && "${game}" != "jak2" ]]; then
-  echo "usage: $0 {jak1|jak2} [output_dir]" >&2
+usage() {
+  cat >&2 <<USAGE
+usage: $0 {jak1|jak2} [output_dir] [--no-bundle-deps]
+
+  output_dir          where to write the .app (default: /Applications)
+  --no-bundle-deps    skip dylib packaging. Faster, but the bundle then runs
+                      ONLY on this machine and only while the build tree
+                      exists. For dev-machine repackaging only.
+
+By default every non-system dylib gk needs — including transitive and
+Homebrew-absolute ones such as OpenSSL behind libcurl — is copied into
+Contents/Frameworks and rewritten to @rpath, so the .app runs on any
+Apple Silicon Mac.
+USAGE
   exit 2
-fi
+}
+
+game=""
+output_dir=""
+bundle_deps=1
+for arg in "$@"; do
+  case "${arg}" in
+    --no-bundle-deps) bundle_deps=0 ;;
+    -h|--help)        usage ;;
+    -*)               echo "error: unknown option ${arg}" >&2; usage ;;
+    jak1|jak2)        game="${arg}" ;;
+    *)                output_dir="${arg}" ;;
+  esac
+done
+[[ -z "${game}" ]] && usage
 
 project_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-output_dir="${2:-/Applications}"
+: "${output_dir:=/Applications}"
 
 case "${game}" in
   jak1) app_name="Jak 1";     bundle_id="dev.nboily.jak1" ;;
@@ -92,15 +117,39 @@ normalise_rpaths() {
   fi
 }
 
+# install_name_tool edits must be checked. A silently failed rewrite leaves an
+# absolute path in place and produces exactly the half-portable bundle this
+# whole step exists to prevent.
+retarget() {
+  local from="$1" to="$2" bin="$3" out
+  out="$(install_name_tool -change "${from}" "${to}" "${bin}" 2>&1)" || {
+    echo "error: install_name_tool -change ${from} -> ${to} failed on ${bin}" >&2
+    [[ -n "${out}" ]] && echo "       ${out}" >&2
+    exit 3
+  }
+}
+
 bundle_binary() {
   local bin="$1" dep name src
   codesign --remove-signature "${bin}" 2>/dev/null || true
   normalise_rpaths "${bin}"
   while IFS= read -r dep; do
     [[ -z "${dep}" ]] && continue
+    # System libraries are present on every macOS install and are never copied.
     case "${dep}" in /System/*|/usr/lib/*|/usr/lib) continue ;; esac
     name="${dep##*/}"
-    case ";${copied};" in *";${name};"*) continue ;; esac
+
+    # A library already copied still needs THIS binary's reference rewritten.
+    # Skipping the rewrite here was the original defect: libcurl kept an
+    # absolute /opt/homebrew/... path to libcrypto, so the bundle ran only on a
+    # machine that happened to have that exact Homebrew install.
+    if [[ ";${copied};" == *";${name};"* ]]; then
+      [[ "${dep}" != "@rpath/${name}" ]] && retarget "${dep}" "@rpath/${name}" "${bin}"
+      continue
+    fi
+
+    # Resolve the real file. @rpath deps come from the build tree; absolute
+    # deps (Homebrew: openssl, zstd, nghttp2) are taken from where they point.
     if [[ "${dep}" == @rpath/* ]]; then
       src="$(find "${project_root}/build" -name "${name}" -print -quit 2>/dev/null || true)"
     elif [[ -f "${dep}" ]]; then
@@ -108,22 +157,32 @@ bundle_binary() {
     else
       src="$(find "${project_root}/build" -name "${name}" -print -quit 2>/dev/null || true)"
     fi
-    if [[ -z "${src}" ]]; then
+    if [[ -z "${src}" || ! -f "${src}" ]]; then
       echo "error: cannot resolve dependency ${dep} of ${bin}" >&2
       exit 3
     fi
+
     cp -L -f "${src}" "${frameworks_dir}/${name}"
     chmod u+w "${frameworks_dir}/${name}"
     codesign --remove-signature "${frameworks_dir}/${name}" 2>/dev/null || true
-    install_name_tool -id "@rpath/${name}" "${frameworks_dir}/${name}" 2>/dev/null || true
-    install_name_tool -change "${dep}" "@rpath/${name}" "${bin}" 2>/dev/null || true
+    if ! install_name_tool -id "@rpath/${name}" "${frameworks_dir}/${name}" 2>/dev/null; then
+      echo "error: install_name_tool -id failed on ${name}" >&2
+      exit 3
+    fi
+    retarget "${dep}" "@rpath/${name}" "${bin}"
     copied="${copied}${name};"
     bundle_binary "${frameworks_dir}/${name}"
   done < <(otool -L "${bin}" | tail -n +2 | sed -E 's/^[[:space:]]+([^[:space:]]+).*/\1/')
 }
 
-echo "    bundling dylibs"
-bundle_binary "${macos_dir}/gk"
+if [[ ${bundle_deps} -eq 1 ]]; then
+  echo "    bundling dylibs"
+  bundle_binary "${macos_dir}/gk"
+else
+  echo "    WARNING: --no-bundle-deps given; dylibs are NOT packaged." >&2
+  echo "             This bundle will run ONLY on this machine, and only" >&2
+  echo "             while ${project_root}/build exists." >&2
+fi
 
 # --- data/ -------------------------------------------------------------------
 # try_get_data_dir() (common/util/FileUtil.cpp) looks for a "data" directory
@@ -243,15 +302,43 @@ fi
 # rather than ship that again.
 echo "    verifying self-containment"
 leaks=0
-while IFS= read -r bin; do
-  if otool -l "${bin}" 2>/dev/null | grep -Fq "${project_root}"; then
-    echo "error: ${bin##*/} still references ${project_root}" >&2
-    leaks=$((leaks+1))
+if [[ ${bundle_deps} -eq 1 ]]; then
+  while IFS= read -r bin; do
+    [[ -n "${bin}" ]] || continue
+    # (a) no load command may name the checkout
+    if otool -l "${bin}" 2>/dev/null | grep -Fq "${project_root}"; then
+      echo "error: ${bin##*/} still references ${project_root}" >&2
+      leaks=$((leaks+1))
+    fi
+    # (b) every non-system dependency must be @rpath/@loader_path, and the file
+    #     it names must actually be in Frameworks. An absolute Homebrew path
+    #     here is the real-world failure: libcurl referenced
+    #     /opt/homebrew/opt/openssl@3/lib/libcrypto.3.dylib, which does not
+    #     exist on a Mac without that exact Homebrew install, so the app died
+    #     in dyld with no message.
+    while IFS= read -r dep; do
+      [[ -n "${dep}" ]] || continue
+      case "${dep}" in
+        /System/*|/usr/lib/*|/usr/lib) continue ;;
+        @rpath/*|@loader_path/*|@executable_path/*)
+          depname="${dep##*/}"
+          if [[ ! -f "${frameworks_dir}/${depname}" ]]; then
+            echo "error: ${bin##*/} needs ${depname}, which is not in Frameworks/" >&2
+            leaks=$((leaks+1))
+          fi
+          ;;
+        *)
+          echo "error: ${bin##*/} has an absolute dependency: ${dep}" >&2
+          leaks=$((leaks+1))
+          ;;
+      esac
+    done < <(otool -L "${bin}" 2>/dev/null | tail -n +2 | sed -E 's/^[[:space:]]+([^[:space:]]+).*/\1/')
+  done < <(printf '%s\n' "${macos_dir}/gk"; find "${frameworks_dir}" -name '*.dylib' 2>/dev/null)
+  if [[ ${leaks} -gt 0 ]]; then
+    echo "error: bundle is NOT portable (${leaks} problems above)" >&2
+    exit 3
   fi
-done < <(printf '%s\n' "${macos_dir}/gk"; find "${frameworks_dir}" -name '*.dylib' 2>/dev/null)
-if [[ ${leaks} -gt 0 ]]; then
-  echo "error: bundle is not self-contained (${leaks} binaries reference the checkout)" >&2
-  exit 3
+  echo "      $(find "${frameworks_dir}" -name '*.dylib' | wc -l | tr -d ' ') dylibs, dependency closure complete"
 fi
 # data/ must hold real files, not links back into the checkout. The only two
 # permitted links are the deliberate log/ and imgui.ini redirects created above,
@@ -271,6 +358,17 @@ fi
 # this script hid both the codesign failure and the verification failure, and
 # reported success on a completely unsigned bundle.
 echo "    signing (ad-hoc)"
+# Deepest-first: signing a nested binary invalidates any enclosing signature, so
+# each dylib is signed before the bundle that contains them.
+if [[ ${bundle_deps} -eq 1 ]]; then
+  while IFS= read -r lib; do
+    [[ -n "${lib}" ]] || continue
+    if ! codesign --force -s - "${lib}" 2>/dev/null; then
+      echo "error: failed to sign ${lib##*/}" >&2
+      exit 3
+    fi
+  done < <(find "${frameworks_dir}" -name '*.dylib' 2>/dev/null)
+fi
 sign_ok=0
 for attempt in 1 2 3; do
   sign_out="$(codesign --force --deep -s - "${app}" 2>&1)" && sign_rc=0 || sign_rc=$?
