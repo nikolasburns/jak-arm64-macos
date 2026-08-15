@@ -6,6 +6,33 @@
 
 #include "game/graphics/pipelines/opengl.h"
 
+namespace {
+
+// The dialect prologue injected as line 1 of every shader.
+//
+// On-disk shaders carry no `#version` line: GLSL requires it to be the first
+// token, and the two dialects need different ones. Injecting it here also means
+// a shader may open with a comment (debug_red does), which desktop GL tolerates
+// before `#version` but ESSL does not.
+//
+// ESSL 3.00 additionally has no default float precision in the fragment stage,
+// so fragment shaders get explicit `highp` defaults. Desktop GLSL 4.10 has no
+// such requirement and does not accept the ES `es` profile, hence the split.
+std::string shader_prologue(ShaderBackend backend, bool is_fragment) {
+  switch (backend) {
+    case ShaderBackend::Angle:
+      if (is_fragment) {
+        return "#version 300 es\nprecision highp float;\nprecision highp int;\n";
+      }
+      return "#version 300 es\n";
+    case ShaderBackend::AppleGL:
+    default:
+      return "#version 410 core\n";
+  }
+}
+
+}  // namespace
+
 Shader::Shader(const std::string& shader_name, GameVersion version) : m_name(shader_name) {
   const std::string height_scale = version == GameVersion::Jak1 ? "1.0" : "0.5";
   const std::string scissor_height = version == GameVersion::Jak1 ? "448.0" : "416.0";
@@ -21,6 +48,10 @@ Shader::Shader(const std::string& shader_name, GameVersion version) : m_name(sha
   vert_src = std::regex_replace(vert_src, std::regex("SCISSOR_HEIGHT"), scissor_height);
   frag_src = std::regex_replace(frag_src, std::regex("SCISSOR_HEIGHT"), scissor_height);
   vert_src = std::regex_replace(vert_src, std::regex("SCISSOR_ADJUST"), "(" + scissor_adjust + ")");
+
+  // inject the dialect prologue as line 1 (see shader_prologue above)
+  vert_src = shader_prologue(kShaderBackend, false) + vert_src;
+  frag_src = shader_prologue(kShaderBackend, true) + frag_src;
 
   m_vert_shader = glCreateShader(GL_VERTEX_SHADER);
   const char* src = vert_src.c_str();

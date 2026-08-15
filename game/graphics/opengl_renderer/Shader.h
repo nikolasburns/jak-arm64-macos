@@ -5,6 +5,21 @@
 #include "common/common_types.h"
 #include "common/versions/versions.h"
 
+// Which GL implementation the shader source is being prepared for.
+//
+// The on-disk shaders are written in the common subset of desktop GLSL 4.10 core
+// and OpenGL ES SL 3.00: they carry NO `#version` directive and no precision
+// qualifiers. The dialect-specific prologue is injected at load time by
+// Shader::Shader, so a single source tree serves both backends.
+enum class ShaderBackend {
+  AppleGL,  // desktop GL 4.10 core (the macOS system GL / oracle path)
+  Angle,    // OpenGL ES 3.0 via ANGLE-Metal
+};
+
+// The backend the shader loader targets. This is a stub constant until the real
+// runtime toggle lands; AppleGL keeps the existing path byte-for-byte.
+constexpr ShaderBackend kShaderBackend = ShaderBackend::AppleGL;
+
 class Shader {
  public:
   static constexpr char shader_folder[] = "game/graphics/opengl_renderer/shaders/";
