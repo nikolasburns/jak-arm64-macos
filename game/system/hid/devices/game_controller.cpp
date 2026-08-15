@@ -1,5 +1,7 @@
 #include "game_controller.h"
 
+#include <algorithm>
+#include <cmath>
 #include <optional>
 
 #include "dualsense_effects.h"
@@ -102,6 +104,27 @@ static std::unordered_map<int, int> pressure_axes_to_button = {
     {12, SDL_GAMEPAD_BUTTON_DPAD_UP},       {13, SDL_GAMEPAD_BUTTON_DPAD_DOWN},
     {14, SDL_GAMEPAD_BUTTON_DPAD_LEFT},     {15, SDL_GAMEPAD_BUTTON_DPAD_RIGHT}};
 
+// Clamp a scaled axis value back into SDL's documented range while it is still a float.
+//
+// The scale factors below (axis_scale, pressure_scale) are user-settable and are NOT validated
+// anywhere: they arrive either from input-settings.json or, for axis_scale, from
+// pc_set_axis_scale (kmachine.cpp), which reinterprets raw GOAL word bits as a float. A large
+// or non-finite scale makes `scale * sdl_value` exceed int's range, and converting an
+// out-of-range float to an integer is UNDEFINED BEHAVIOUR whose result differs by architecture:
+// x86-64 cvttsd2si wraps, ARM64 fcvtzs saturates. That is the same class as the IOP clock bug
+// fixed in game/system/IOP_Kernel.cpp -- here it would peg a stick or trigger to OPPOSITE
+// extremes on the two architectures from the same settings file.
+//
+// Clamping must happen in the FLOAT domain, before the conversion: a std::clamp applied to the
+// already-converted int is too late, because the UB has occurred by then.
+int clamp_scaled_axis_value(float scaled) {
+  // NaN is not ordered, so test for it explicitly rather than relying on clamp.
+  if (std::isnan(scaled)) {
+    return 0;
+  }
+  return static_cast<int>(std::clamp(scaled, -32768.0f, 32767.0f));
+}
+
 // Adjust the value range to 0-255 (127 being neutral)
 // Values come out of SDL as -32,768 to 32,767
 int normalize_axes_value(int sdl_val) {
@@ -140,7 +163,7 @@ void GameController::process_event(const SDL_Event& event,
         binds.analog_axii.find(event.gaxis.axis) != binds.analog_axii.end()) {
       for (const auto& bind : binds.analog_axii.at(event.gaxis.axis)) {
         data->analog_data.at(bind.pad_data_index) =
-            normalize_axes_value(m_settings->axis_scale * event.gaxis.value);
+            normalize_axes_value(clamp_scaled_axis_value(m_settings->axis_scale * event.gaxis.value));
       }
     } else if (event.gaxis.axis >= SDL_GAMEPAD_AXIS_LEFT_TRIGGER &&
                event.gaxis.axis <= SDL_GAMEPAD_AXIS_RIGHT_TRIGGER &&
@@ -181,7 +204,7 @@ void GameController::process_event(const SDL_Event& event,
         if (pressure_index != PadData::PressureIndex::INVALID_PRESSURE) {
           if (m_settings->enable_pressure_sensitivity && m_has_pressure_sensitive_buttons) {
             data->pressure_data.at(pressure_index) = normalize_axes_value_drift_compensated(
-                m_settings->pressure_scale * event.gaxis.value);
+                clamp_scaled_axis_value(m_settings->pressure_scale * event.gaxis.value));
           } else {
             data->pressure_data.at(pressure_index) = event.gaxis.value > 1638 ? 255 : 0;
           }
