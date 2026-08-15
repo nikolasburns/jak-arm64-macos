@@ -374,7 +374,13 @@ void GLDisplay::init_splash() {
     glGetShaderiv(s, GL_COMPILE_STATUS, &compile_ok);
     if (!compile_ok) {
       glGetShaderInfoLog(s, len, nullptr, err);
-      lg::error("splash shader compile failed: {}\n", err);
+      // init_splash runs once per frame until it succeeds, so an unconditional
+      // log here spams a line per frame for the whole load. Report once.
+      static bool reported = false;
+      if (!reported) {
+        reported = true;
+        lg::error("splash shader compile failed: {}", err);
+      }
       glDeleteShader(s);
       return 0;
     }
@@ -399,7 +405,12 @@ void GLDisplay::init_splash() {
   glGetProgramiv(m_splash_program, GL_LINK_STATUS, &compile_ok);
   if (!compile_ok) {
     glGetProgramInfoLog(m_splash_program, len, nullptr, err);
-    lg::error("Failed to link splash shader:\n{}", err);
+    // as above: this path retries every frame, so report the failure once.
+    static bool link_reported = false;
+    if (!link_reported) {
+      link_reported = true;
+      lg::error("Failed to link splash shader:\n{}", err);
+    }
     glDeleteProgram(m_splash_program);
     m_splash_program = 0;
     return;
