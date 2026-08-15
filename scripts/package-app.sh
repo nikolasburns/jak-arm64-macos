@@ -528,6 +528,30 @@ if ! codesign -d --entitlements - --xml "${macos_dir}/gk" 2>/dev/null | grep -q 
 fi
 echo "      JIT entitlement present on gk"
 
+# --- make Finder notice the new icon -----------------------------------------
+# The bundle is rm -rf'd and rebuilt at the SAME path every time, so Finder and
+# the Dock keep serving the icon they cached for the old bundle -- the app shows
+# a generic or previous icon until something else happens to invalidate the
+# cache. The icon itself is fine; only the cache is stale.
+#
+# Two steps, and both are needed:
+#   1. touch the bundle and Info.plist so their mtimes are newer than the cache
+#      entry. LaunchServices keys freshness off the bundle's modification date,
+#      and cp -R can preserve older timestamps from the source tree.
+#   2. re-register with LaunchServices so the icon is re-read now rather than
+#      whenever the database next happens to refresh.
+#
+# lsregister lives outside PATH and its location is not API, so this is
+# best-effort: a failure here costs a stale icon, never a broken bundle.
+echo "    refreshing Finder icon cache"
+touch "${contents}/Info.plist" "${app}"
+lsregister="/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister"
+if [[ -x "${lsregister}" ]]; then
+  "${lsregister}" -f "${app}" >/dev/null 2>&1 || true
+else
+  echo "      note: lsregister not found; the icon may need a Finder restart" >&2
+fi
+
 echo "==> ${app}"
 echo "    size: $(du -sh "${app}" | cut -f1)"
 codesign -dv "${app}" 2>&1 | grep -E "Signature|Identifier" | sed 's/^/    /' || true
