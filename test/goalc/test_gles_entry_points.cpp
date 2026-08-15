@@ -205,3 +205,96 @@ TEST(GlesEntryPoints, ScannerSeesTheAttachmentSites) {
                                    " (Shrub/Tie3/TFragment) to call multi_draw_elements();"
                                    " the scan is probably looking at the wrong tree";
 }
+
+
+// glVertexAttribIPointer's type argument is a CONTRACT with the shader's
+// declared attribute type on Metal, not a conversion request.
+//
+// Desktop GL silently widens: feeding GL_UNSIGNED_SHORT data to an attribute
+// declared `in int` works, and did for years. Metal requires the declared type
+// and the buffer format to agree, so ANGLE cannot build the pipeline at all:
+//
+//   Vertex attribute _utime_of_day_index(3) of type int cannot be read using
+//   MTLAttributeFormatUShort
+//
+// The failure is quiet in the worst way. CreateRenderPipelineState fails and
+// logs a GL error nobody reads; with no pipeline object, setRenderPipelineState
+// is never called, and the draw is encoded anyway. A debug ANGLE catches that
+// with its own ASSERT; the release dylib we ship has ASSERTs compiled out, so
+// the pipeline-less draw reaches Metal and dereferences null inside the Apple
+// driver -- a corpse naming neither the shader, the attribute, nor the dialect.
+// It cost four sessions and one withdrawn upstream bug report.
+//
+// The rule is agreement, not "always unsigned": an attribute fed unsigned data
+// must be declared uint/uvecN, and one fed GL_INT must stay int/ivecN. Cast at
+// the use site -- ESSL 3.00 has no implicit int/uint conversion, so the cast is
+// explicit and the shader compiler checks it.
+//
+// Signed declarations are therefore allowlisted rather than banned outright.
+// Each entry below was checked against its glVertexAttribIPointer call and is
+// fed GL_INT; adding to this list means having done that check.
+TEST(GlesEntryPoints, IntegerVertexAttributesAreDeclaredWithMatchingSignedness) {
+  // shader file -> the call site proving its integer attributes are signed.
+  const std::vector<std::pair<std::string, std::string>> kSignedByDesign = {
+      {"slow_time.vert", "SlowTimeEffect.cpp:47 glVertexAttribIPointer(0, 1, GL_INT, ...)"},
+      {"simple_texture.vert", "opengl_utils.cpp:231 glVertexAttribIPointer(0, 1, GL_INT, ...)"},
+      {"tex_anim.vert", "TextureAnimator.cpp:529 glVertexAttribIPointer(0, 1, GL_INT, ...)"},
+  };
+
+  const auto shader_dir = file_util::get_file_path({"game/graphics/opengl_renderer/shaders"});
+  ASSERT_TRUE(fs::exists(shader_dir)) << "shader tree not found at " << shader_dir;
+
+  int signed_seen = 0;
+  int unsigned_decls = 0;
+  for (const auto& p : fs::directory_iterator(shader_dir)) {
+    if (!p.is_regular_file() || p.path().extension().string() != ".vert") {
+      continue;
+    }
+    const auto name = p.path().filename().string();
+    const auto text = strip_comments(file_util::read_text_file(p));
+
+    bool allowlisted = false;
+    for (const auto& entry : kSignedByDesign) {
+      if (entry.first == name) {
+        allowlisted = true;
+      }
+    }
+
+    for (const char* t : {" in uint ", " in uvec2 ", " in uvec3 ", " in uvec4 "}) {
+      for (size_t i = text.find(t); i != std::string::npos; i = text.find(t, i + 1)) {
+        ++unsigned_decls;
+      }
+    }
+
+    for (size_t i = text.find("layout"); i != std::string::npos; i = text.find("layout", i + 1)) {
+      const size_t eol = text.find('\n', i);
+      const std::string line = text.substr(i, eol == std::string::npos ? eol : eol - i);
+      if (line.find(" in ") == std::string::npos) {
+        continue;
+      }
+      for (const char* signed_type : {" in int ", " in ivec2 ", " in ivec3 ", " in ivec4 "}) {
+        if (line.find(signed_type) == std::string::npos) {
+          continue;
+        }
+        ++signed_seen;
+        EXPECT_TRUE(allowlisted)
+            << name << ": integer attribute declared signed, but is fed unsigned data.\n"
+            << "  " << line << "\n"
+            << "  Metal rejects the pipeline when the declared type and the"
+               " glVertexAttribIPointer format disagree. Declare it uint/uvecN and cast at"
+               " the use site -- or, if this attribute really is fed GL_INT, add it to"
+               " kSignedByDesign with the call site that proves it.";
+      }
+    }
+  }
+
+  // Scanner self-guards. A green scan over an empty corpus is the failure mode
+  // this class of test exists to prevent, so both halves must find real work:
+  // the unsigned attributes the fix introduced, and the signed ones it kept.
+  EXPECT_GE(unsigned_decls, 10)
+      << "expected the background/sprite/merc shaders to declare unsigned integer attributes;"
+         " the scan is probably looking at the wrong tree";
+  EXPECT_EQ(signed_seen, (int)kSignedByDesign.size())
+      << "expected to see exactly the allowlisted signed attributes; if a shader was added or"
+         " removed, update kSignedByDesign after checking its call site";
+}
