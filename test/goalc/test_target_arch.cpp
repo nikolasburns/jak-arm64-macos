@@ -333,3 +333,136 @@ TEST(TargetArch, IopSystemClockWrapsInsteadOfSaturating) {
             static_cast<u32>((static_cast<u64>(kWrapMicros) * 2ull * 4608ull) / 125ull))
       << "the clock must wrap cleanly at multiples of the 2^32 boundary";
 }
+
+// The ARM64 function pool packs small JIT'd function objects (C trampolines,
+// mips2c stubs) into shared executable pages, keyed on the address of the
+// heap's kheapinfo. For a level heap that struct is INLINE in the level
+// (jak1 level-h.gc: "(heap kheap :inline)"), so the key is a fixed slot reused
+// by every level that ever occupies it.
+//
+// Unloading a level rewinds the heap in GOAL (jak1 level.gc:700,
+// "reset the level heap!", current = base) with no C-side notification. If the
+// pool keeps handing out addresses from a page carved out of the PREVIOUS
+// occupant's heap, the JIT'd code aliases memory the new level has already been
+// given for ordinary data.
+//
+// This models the pool lifecycle across one unload/reload and asserts the pool
+// does not hand out an address inside the new level's data. The check under
+// test must run on EVERY allocation against the heap: the rewind is only
+// observable while the heap is still empty, and a level typically allocates
+// ordinary data before its first trampoline.
+namespace {
+
+struct FakeHeap {
+  u32 base = 0;
+  u32 top = 0;
+  u32 current = 0;
+};
+
+struct FakePool {
+  u32 next = 0;
+  u32 end = 0;
+};
+
+constexpr u32 kFakePageSize = 16384;
+
+// Mirrors arm64_function_pool_note_heap_use() in game/kernel/common/kmalloc.cpp.
+void pool_note_heap_use(FakePool* pool, const FakeHeap& heap) {
+  if (heap.current > heap.base) {
+    return;
+  }
+  if (pool->next && pool->end > heap.base) {
+    pool->next = 0;
+    pool->end = 0;
+  }
+}
+
+// An ordinary (non-pooled) bottom allocation. Goes through the same kmalloc
+// entry point, so it observes the heap too.
+void fake_data_alloc(FakePool* pool, FakeHeap* heap, u32 size, bool fix_enabled) {
+  if (fix_enabled) {
+    pool_note_heap_use(pool, *heap);
+  }
+  heap->current += size;
+}
+
+// Mirrors the pooled "function" path of kmalloc().
+u32 fake_pool_alloc(FakePool* pool, FakeHeap* heap, u32 size, bool fix_enabled) {
+  if (fix_enabled) {
+    pool_note_heap_use(pool, *heap);
+  }
+  const u32 allocation_size = ((size + 0xf) & ~0xfu) + 4;  // object + BASIC_OFFSET
+  if (!pool->next || pool->next + allocation_size > pool->end) {
+    const u32 page_start = (heap->current + kFakePageSize - 1) & ~(kFakePageSize - 1);
+    if (page_start + kFakePageSize > heap->top) {
+      return 0;
+    }
+    heap->current = page_start + kFakePageSize;  // heap bumps past the whole page
+    pool->next = page_start;
+    pool->end = page_start + kFakePageSize;
+  }
+  const u32 addr = pool->next;
+  pool->next += allocation_size;
+  return addr;
+}
+
+// Loads a level into a reused heap slot and reports whether a trampoline landed
+// inside the new level's ordinary data. `data_first` selects whether the level
+// allocates data before or after its first trampoline.
+bool trampoline_aliases_level_data(bool fix_enabled, bool data_first) {
+  FakeHeap heap;
+  heap.base = 0x100000;
+  heap.current = heap.base;
+  heap.top = heap.base + 18 * 1024 * 1024;
+  FakePool pool;
+
+  // First level occupies the slot: two trampolines, then bulk data.
+  fake_pool_alloc(&pool, &heap, 0x40, fix_enabled);
+  fake_pool_alloc(&pool, &heap, 0x40, fix_enabled);
+  fake_data_alloc(&pool, &heap, 4 * 1024 * 1024, fix_enabled);
+
+  // Unload: GOAL rewinds the heap without telling the pool.
+  heap.current = heap.base;
+
+  // Second level loads into the same slot.
+  u32 data_lo = 0;
+  u32 data_hi = 0;
+  if (data_first) {
+    data_lo = heap.current;
+    fake_data_alloc(&pool, &heap, 1024 * 1024, fix_enabled);
+    data_hi = heap.current;
+  }
+  const u32 trampoline = fake_pool_alloc(&pool, &heap, 0x40, fix_enabled);
+  if (!data_first) {
+    data_lo = heap.current;
+    fake_data_alloc(&pool, &heap, 1024 * 1024, fix_enabled);
+    data_hi = heap.current;
+  }
+
+  return trampoline >= data_lo && trampoline < data_hi;
+}
+
+}  // namespace
+
+TEST(TargetArch, Arm64FunctionPoolDroppedWhenLevelHeapIsRewound) {
+  // Both allocation orderings must be safe. The data-then-trampoline ordering
+  // is the one that defeats every check confined to the pooled allocation path,
+  // because by then the heap has been bumped past the stale page again.
+  EXPECT_FALSE(trampoline_aliases_level_data(/*fix_enabled=*/true, /*data_first=*/true))
+      << "a pooled function allocation was served from the PREVIOUS level's page and landed "
+         "inside the new level's data. The staleness check must run on every kmalloc against "
+         "the heap, not only on pooled allocations: the rewind is only visible while the heap "
+         "is still empty, and a level usually allocates data before its first trampoline.";
+
+  EXPECT_FALSE(trampoline_aliases_level_data(/*fix_enabled=*/true, /*data_first=*/false))
+      << "a pooled function allocation aliased the new level's data when the trampoline was "
+         "allocated before the level's bulk data";
+
+  // Guard the test itself: without the check, both orderings MUST corrupt.
+  // If these ever pass, the model no longer reproduces the bug and the
+  // assertions above have stopped proving anything.
+  EXPECT_TRUE(trampoline_aliases_level_data(/*fix_enabled=*/false, /*data_first=*/true))
+      << "the unfixed model no longer reproduces the aliasing bug; this test has gone vacuous";
+  EXPECT_TRUE(trampoline_aliases_level_data(/*fix_enabled=*/false, /*data_first=*/false))
+      << "the unfixed model no longer reproduces the aliasing bug; this test has gone vacuous";
+}
