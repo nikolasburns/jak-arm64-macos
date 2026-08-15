@@ -130,6 +130,28 @@ static void set_angle_library_hints() {
   SDL_SetHint(SDL_HINT_EGL_LIBRARY, egl.c_str());
   SDL_SetHint(SDL_HINT_OPENGL_LIBRARY, gles.c_str());
   lg::info("gfx backend ANGLE: EGL={} GLESv2={}", egl, gles);
+
+  // Select ANGLE's Metal backend.
+  //
+  // THIS IS LOAD-BEARING, and its absence FAILS QUIETLY. SDL creates the EGL
+  // display without an EGL_PLATFORM_ANGLE_TYPE_ANGLE attribute, so ANGLE picks
+  // its own default -- which on this build is the *GL* backend, i.e. GLES
+  // emulated on the very Apple GL driver ANGLE exists to replace. That still
+  // produces a working GLES 3.0 context and a plausible log line
+  // ("ANGLE (Apple, Apple M4 Pro, OpenGL 4.1 Metal - 90.5)"), so it reads as
+  // success while not being the backend we asked for. With this set the
+  // renderer string instead reads "ANGLE Metal Renderer: Apple M4 Pro".
+  //
+  // Respect an explicit override so the GL backend stays reachable for A/B
+  // attribution (ANGLE_DEFAULT_PLATFORM=gl), which is worth having when
+  // deciding whether a defect belongs to ANGLE's frontend or to Metal.
+  if (!std::getenv("ANGLE_DEFAULT_PLATFORM")) {
+    setenv("ANGLE_DEFAULT_PLATFORM", "metal", 0);
+    lg::info("gfx backend ANGLE: ANGLE_DEFAULT_PLATFORM=metal");
+  } else {
+    lg::info("gfx backend ANGLE: ANGLE_DEFAULT_PLATFORM={} (from environment)",
+             std::getenv("ANGLE_DEFAULT_PLATFORM"));
+  }
 }
 
 static bool gl_inited = false;
