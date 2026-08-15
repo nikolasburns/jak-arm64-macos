@@ -424,25 +424,35 @@ TEST(ARM64IRInt128, Math2AllOpcodesBoundariesAndAliases) {
 #endif
 }
 
+// ARM-017: these ops build temporaries in BOTH X16 (GPR_64) and V16 (VECTOR_FLOAT), and the
+// exclusion is scoped per register class, so both must be declared. This test previously
+// asserted a size of 1 (X16 only), pinning the clobber bug fixed in this commit series -- see
+// the matching test in test_arm64_ir_vector.cpp and the sweep table in PROGRESS.md.
 TEST(ARM64IRInt128, ScratchRegistersExcludedOnlyForArmShuffles) {
   auto dst = make_reg(0);
   auto src = make_reg(1);
   IR_Int128Math2Asm shuffle(true, dst.get(), src.get(), IR_Int128Math2Asm::Kind::VPSHUFLW, 0xE4);
   const auto arm = shuffle.to_rai(InstructionSet::ARM64);
   const auto x86 = shuffle.to_rai(InstructionSet::X86);
-  ASSERT_EQ(arm.exclude.size(), 1);
+  ASSERT_EQ(arm.exclude.size(), 2);
   EXPECT_EQ(arm.exclude.at(0), X16);
+  EXPECT_EQ(arm.exclude.at(1), V16);
   EXPECT_TRUE(x86.exclude.empty());
 
+  // PW_SLL is a plain lane shift: no scratch, so it must stay unconstrained.
   IR_Int128Math2Asm shift(true, dst.get(), src.get(), IR_Int128Math2Asm::Kind::PW_SLL, 4);
   EXPECT_TRUE(shift.to_rai(InstructionSet::ARM64).exclude.empty());
 
   IR_Int128Math2Asm byte_shift(true, dst.get(), src.get(), IR_Int128Math2Asm::Kind::VPSRLDQ, 4);
-  ASSERT_EQ(byte_shift.to_rai(InstructionSet::ARM64).exclude.size(), 1);
-  EXPECT_EQ(byte_shift.to_rai(InstructionSet::ARM64).exclude.at(0), X16);
+  const auto byte_shift_arm = byte_shift.to_rai(InstructionSet::ARM64);
+  ASSERT_EQ(byte_shift_arm.exclude.size(), 2);
+  EXPECT_EQ(byte_shift_arm.exclude.at(0), X16);
+  EXPECT_EQ(byte_shift_arm.exclude.at(1), V16);
 
   IR_Int128Math3Asm pack(true, dst.get(), src.get(), src.get(), IR_Int128Math3Asm::Kind::PACKUSWB);
-  ASSERT_EQ(pack.to_rai(InstructionSet::ARM64).exclude.size(), 1);
-  EXPECT_EQ(pack.to_rai(InstructionSet::ARM64).exclude.at(0), X16);
+  const auto pack_arm = pack.to_rai(InstructionSet::ARM64);
+  ASSERT_EQ(pack_arm.exclude.size(), 2);
+  EXPECT_EQ(pack_arm.exclude.at(0), X16);
+  EXPECT_EQ(pack_arm.exclude.at(1), V16);
   EXPECT_TRUE(pack.to_rai(InstructionSet::X86).exclude.empty());
 }

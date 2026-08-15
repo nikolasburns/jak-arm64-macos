@@ -2401,8 +2401,11 @@ RegAllocInstr IR_Int128Math3Asm::to_rai() {
 RegAllocInstr IR_Int128Math3Asm::to_rai(emitter::InstructionSet instr_set) {
   auto rai = to_rai();
   if (instr_set == emitter::InstructionSet::ARM64 && m_kind == Kind::PACKUSWB) {
-    // ARM64 vpackuswb packs through V16 so dst may alias either source.
+    // ARM64 vpackuswb packs through V16 so dst may alias either source.  Exclusions are scoped
+    // to a register class, so V16 must be named explicitly -- excluding X16 (GPR_64) does NOT
+    // cover V16 (VECTOR_FLOAT), which is the register this comment is actually about.
     rai.add_exclude(emitter::X16, RegClass::GPR_64);
+    rai.add_exclude(emitter::V16, RegClass::VECTOR_FLOAT);
   }
   return rai;
 }
@@ -2713,8 +2716,11 @@ RegAllocInstr IR_Int128Math2Asm::to_rai(emitter::InstructionSet instr_set) {
       ((m_kind == Kind::VPSRLDQ || m_kind == Kind::VPSLLDQ) && m_imm.has_value() &&
        *m_imm > 0 && *m_imm < 16);
   if (instr_set == emitter::InstructionSet::ARM64 && uses_scratch) {
-    // ARM64 byte shifts and shuffles build temporary vectors in X16/V16.
+    // ARM64 byte shifts and shuffles build temporary vectors in X16/V16.  Exclusions are scoped
+    // to a register class, so protect both scratch registers explicitly: excluding X16 (GPR_64)
+    // does NOT cover V16 (VECTOR_FLOAT).
     rai.add_exclude(emitter::X16, RegClass::GPR_64);
+    rai.add_exclude(emitter::V16, RegClass::VECTOR_FLOAT);
   }
   return rai;
 }
@@ -2981,8 +2987,11 @@ RegAllocInstr IR_SwizzleVF::to_rai() {
 RegAllocInstr IR_SwizzleVF::to_rai(emitter::InstructionSet instr_set) {
   auto rai = to_rai();
   if (instr_set == emitter::InstructionSet::ARM64) {
-    // ARM64 swizzle_vf uses X16/V16 for its byte-index table.
+    // ARM64 swizzle_vf uses X16/V16 for its byte-index table.  Exclusions are scoped to a
+    // register class, so protect both scratch registers explicitly: excluding X16 (GPR_64) does
+    // NOT cover V16 (VECTOR_FLOAT), even though the two share an id in the ARM64 numbering.
     rai.add_exclude(emitter::X16, RegClass::GPR_64);
+    rai.add_exclude(emitter::V16, RegClass::VECTOR_FLOAT);
   }
   return rai;
 }
