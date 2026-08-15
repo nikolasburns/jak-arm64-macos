@@ -339,22 +339,82 @@ TEST(ARM64IRVector, SwizzleAllControlsAndSplatLanes) {
 #endif
 }
 
+// ARM-017: every IR op whose ARM64 emitter path uses a reserved scratch register MUST declare
+// that register in its to_rai() exclusion set, or the register allocator is free to park a live
+// value there and the emitted code will trample it.
+//
+// The exclusion is scoped to a REGISTER CLASS, so X16 (GPR_64) and V16 (VECTOR_FLOAT) must each
+// be excluded explicitly -- declaring X16 alone does NOT protect V16, even though the two share
+// an id in the ARM64 register numbering. That aliasing is exactly what made this easy to miss:
+// the comments on all four ops said "X16/V16" while three of them declared only X16.
+//
+// Corruption from this is silent and surfaces arbitrarily far downstream, so the declarations
+// are pinned here rather than left to a codegen test. Helper below keeps each op's assertion to
+// one line so a newly-added scratch-using op is obvious by omission.
+namespace {
+void expect_arm64_scratch_excluded(const RegAllocInstr& arm,
+                                   const RegAllocInstr& x86,
+                                   const std::string& what) {
+  ASSERT_EQ(arm.exclude.size(), 2) << what << ": must exclude BOTH X16 and V16 on ARM64";
+  EXPECT_EQ(arm.exclude.at(0), X16) << what;
+  EXPECT_EQ(arm.exclude.at(1), V16) << what;
+  EXPECT_TRUE(x86.exclude.empty()) << what << ": x86 reserves nothing and must stay unconstrained";
+}
+}  // namespace
+
 TEST(ARM64IRVector, ScratchRegistersExcludedOnlyOnArm64) {
   auto dst = make_reg(0);
   auto src1 = make_reg(1);
   auto src2 = make_reg(2);
-  IR_BlendVF blend(true, dst.get(), src1.get(), src2.get(), 0b0101);
-  auto arm_blend = blend.to_rai(InstructionSet::ARM64);
-  auto x86_blend = blend.to_rai(InstructionSet::X86);
-  ASSERT_EQ(arm_blend.exclude.size(), 2);
-  EXPECT_EQ(arm_blend.exclude.at(0), X16);
-  EXPECT_EQ(arm_blend.exclude.at(1), V16);
-  EXPECT_TRUE(x86_blend.exclude.empty());
 
+  // blend_vf builds its selector in X16/V16. This one was always correct and is the pattern.
+  IR_BlendVF blend(true, dst.get(), src1.get(), src2.get(), 0b0101);
+  expect_arm64_scratch_excluded(blend.to_rai(InstructionSet::ARM64),
+                                blend.to_rai(InstructionSet::X86), "IR_BlendVF");
+
+  // swizzle_vf builds its byte-index table in X16/V16. V16 was MISSING here -- and swizzle_vf
+  // has no ASSERT(dst != V16) guard, so a bad allocation corrupted silently rather than firing.
   IR_SwizzleVF swizzle(true, dst.get(), src1.get(), 0b11100100);
-  auto arm_swizzle = swizzle.to_rai(InstructionSet::ARM64);
-  auto x86_swizzle = swizzle.to_rai(InstructionSet::X86);
-  ASSERT_EQ(arm_swizzle.exclude.size(), 1);
-  EXPECT_EQ(arm_swizzle.exclude.at(0), X16);
-  EXPECT_TRUE(x86_swizzle.exclude.empty());
+  expect_arm64_scratch_excluded(swizzle.to_rai(InstructionSet::ARM64),
+                                swizzle.to_rai(InstructionSet::X86), "IR_SwizzleVF");
+
+  // Siblings found by the ARM-017 sweep -- same omission, same mechanical fix.
+  // vpshuflw/vpshufhw build a permuted vector in X16/V16 and, like swizzle_vf, have no V16
+  // assert, so they were also silent.
+  IR_Int128Math2Asm shuflw(true, dst.get(), src1.get(), IR_Int128Math2Asm::Kind::VPSHUFLW, 0x1b);
+  expect_arm64_scratch_excluded(shuflw.to_rai(InstructionSet::ARM64),
+                                shuflw.to_rai(InstructionSet::X86), "IR_Int128Math2Asm VPSHUFLW");
+
+  IR_Int128Math2Asm shufhw(true, dst.get(), src1.get(), IR_Int128Math2Asm::Kind::VPSHUFHW, 0x1b);
+  expect_arm64_scratch_excluded(shufhw.to_rai(InstructionSet::ARM64),
+                                shufhw.to_rai(InstructionSet::X86), "IR_Int128Math2Asm VPSHUFHW");
+
+  // vpsrldq/vpslldq use V16 as a zero vector, but ONLY when imm != 0 (imm == 0 emits the
+  // degenerate src/src form and touches no scratch). Both cases are pinned so the conditional
+  // exclusion cannot silently widen or narrow.
+  IR_Int128Math2Asm srldq(true, dst.get(), src1.get(), IR_Int128Math2Asm::Kind::VPSRLDQ, 4);
+  expect_arm64_scratch_excluded(srldq.to_rai(InstructionSet::ARM64),
+                                srldq.to_rai(InstructionSet::X86), "IR_Int128Math2Asm VPSRLDQ(4)");
+
+  IR_Int128Math2Asm slldq(true, dst.get(), src1.get(), IR_Int128Math2Asm::Kind::VPSLLDQ, 4);
+  expect_arm64_scratch_excluded(slldq.to_rai(InstructionSet::ARM64),
+                                slldq.to_rai(InstructionSet::X86), "IR_Int128Math2Asm VPSLLDQ(4)");
+
+  // imm == 0: no scratch is used, so nothing may be excluded -- over-declaring would needlessly
+  // constrain the allocator on every shift-by-zero.
+  IR_Int128Math2Asm srldq0(true, dst.get(), src1.get(), IR_Int128Math2Asm::Kind::VPSRLDQ, 0);
+  EXPECT_TRUE(srldq0.to_rai(InstructionSet::ARM64).exclude.empty())
+      << "VPSRLDQ(0) emits no scratch use and must not constrain the allocator";
+
+  // PACKUSWB packs through V16 so dst may alias either source.
+  IR_Int128Math3Asm packuswb(true, dst.get(), src1.get(), src2.get(),
+                             IR_Int128Math3Asm::Kind::PACKUSWB);
+  expect_arm64_scratch_excluded(packuswb.to_rai(InstructionSet::ARM64),
+                                packuswb.to_rai(InstructionSet::X86),
+                                "IR_Int128Math3Asm PACKUSWB");
+
+  // A Kind that uses no scratch must stay unconstrained on both targets.
+  IR_Int128Math3Asm por(true, dst.get(), src1.get(), src2.get(), IR_Int128Math3Asm::Kind::POR);
+  EXPECT_TRUE(por.to_rai(InstructionSet::ARM64).exclude.empty())
+      << "POR uses no scratch register and must not constrain the allocator";
 }
