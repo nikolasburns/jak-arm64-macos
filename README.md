@@ -13,18 +13,12 @@ directly and the runtime executes it.
 | ![Jak and Daxter title screen at sunset, pink and purple cloud layers over the ocean](docs/img/jak1-title.png) | ![Jak II title screen, Haven City at night](docs/img/jak2-title.png) |
 | <sub>Jak 1 title screen</sub> | <sub>Jak 2 title screen</sub> |
 
-That claim is audited, not asserted: see
-**[diag/native-audit.md](diag/native-audit.md)** for a nine-check verification
-covering process translation flags, every mapped Mach-O image, live
-disassembly of JIT'd GOAL code in both running games, and the build artifacts —
-each with the command and its actual output.
-
 **Status**
 
 | Game | State |
 |---|---|
-| **Jak 1** | **Playable.** Boots, intro cutscene, Geyser Rock and Sandover Village load and play. Gameplay validation in progress. |
-| **Jak 2** | Boots to title / attract. Full playthrough not yet validated. |
+| **Jak 1** | **Playable.** Full playthrough not yet validated. |
+| **Jak 2** | **Playable.** Full playthrough not yet validated. |
 
 ---
 
@@ -49,9 +43,6 @@ This project stands on two others, and the history here preserves both:
    evidence that found it (see below).
 3. **Regression coverage** for the bug class that produced most of them.
 
-The full commit history from upstream through the ARM64 fork to this work is
-intact — `git log --follow` on any kernel file shows the whole chain.
-
 ---
 
 ## Engineering notes
@@ -60,10 +51,9 @@ Two documents carry the detail of what the port actually involved:
 
 - **[PORTING-NOTES.md](PORTING-NOTES.md)** — the engineering reference. The
   recurring bug class, ARM64 traps, code-density findings, techniques for
-  debugging a JIT'd Lisp runtime, and a section on **adding Jak 3**.
+  debugging a JIT'd Lisp runtime.
 - **[CASE-STUDIES.md](CASE-STUDIES.md)** — two multi-session bug hunts written up
-  in full, *including the falsified hypotheses and the misreadings*. The wrong
-  turns are the point: they show which techniques pay off and in what order.
+  in full.
 
 ---
 
@@ -117,9 +107,6 @@ Notes from installing both:
 - **The texture pass is single-threaded.** `extract_level.cpp` forces
   `num_workers = 1` whenever replacements are active, so this run cannot be
   parallelised — but it is still fast (~30 s for Jak 1 on an M4 Pro).
-- **Skip animated textures, sky domes and eye textures** if a pack includes
-  them: those are composited or cycled at runtime and break when upscaled. Both
-  packs above already exclude the animated set, so no manual pruning is needed.
 - **Strip editor residue** (`.png~`, `.svg`, `desktop.ini`) before extracting.
 - Remember the copy step below — the decompiler writes to `out/<game>/fr3`
   while the runtime reads `out/<game>-arm64/fr3`.
@@ -127,10 +114,6 @@ Notes from installing both:
 ```sh
 cp out/jak1/fr3/*.fr3 out/jak1-arm64/fr3/
 ```
-
-`fr3` files are architecture-neutral, so copying them between trees is safe.
-**`iso/` is not** — it contains compiled code and must never be copied across
-architectures.
 
 ## Compile the game
 
