@@ -4,6 +4,15 @@ Run **Jak and Daxter: The Precursor Legacy** and **Jak II** natively on Apple
 Silicon. No Rosetta, no translation layer — the GOAL compiler emits ARM64
 directly and the runtime executes it.
 
+![Jak and Daxter in Sandover Village at dusk, lanterns lit and the moon over the cliffs, running natively on Apple Silicon with the HD texture pack](docs/img/jak1-sandover-hero.png)
+
+<sub>Jak 1 on Apple Silicon, HD texture pack installed.</sub>
+
+| | |
+|---|---|
+| ![Jak and Daxter title screen at sunset, pink and purple cloud layers over the ocean](docs/img/jak1-title.png) | ![Jak II title screen, Haven City at night](docs/img/jak2-title.png) |
+| <sub>Jak 1 title screen</sub> | <sub>Jak 2 title screen</sub> |
+
 That claim is audited, not asserted: see
 **[diag/native-audit.md](diag/native-audit.md)** for a nine-check verification
 covering process translation flags, every mapped Mach-O image, live
@@ -14,7 +23,7 @@ each with the command and its actual output.
 
 | Game | State |
 |---|---|
-| **Jak 1** | **Playable.** Boots, intro cutscene, Geyser Rock and Village 1 load and play. Gameplay validation in progress. |
+| **Jak 1** | **Playable.** Boots, intro cutscene, Geyser Rock and Sandover Village load and play. Gameplay validation in progress. |
 | **Jak 2** | Boots to title / attract. Full playthrough not yet validated. |
 
 ---
