@@ -92,7 +92,7 @@ full:
 
 | Game | Pack | Source |
 |---|---|---|
-| Jak 1 | *Jak and Daxter Reloaded in HD* | [NexusMods mod 10](https://www.nexusmods.com/jakanddaxtertheprecursorlegacy/mods/10) |
+| Jak 1 | *Jak and Daxter Reloaded in HD* | [NexusMods (OpenGOAL) mod 10](https://www.nexusmods.com/opengoal/mods/10) |
 | Jak 2 | *OpenGOAL Jak 2 HD Texture Pack* (MIT) | [github.com/Aloqas/OpenGOAL-Jak2-HD-Texture-Pack](https://github.com/Aloqas/OpenGOAL-Jak2-HD-Texture-Pack) |
 
 **This repository ships no textures** — install a pack yourself if you want one.
