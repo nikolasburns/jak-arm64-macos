@@ -569,15 +569,15 @@ TextureAnimator::TextureAnimator(ShaderLibrary& shaders,
 
   // create the slime LUT texture
   glGenTextures(1, &m_slime_lut_texture);
-  glBindTexture(GL_TEXTURE_1D, m_slime_lut_texture);
+  glBindTexture(GL_TEXTURE_2D, m_slime_lut_texture);
   std::vector<u8> slime_data;
   for (auto x : kSlimeLutData) {
     slime_data.push_back(x * 255);
   }
-  glTexImage1D(GL_TEXTURE_1D, 0, GL_RGBA, 256, 0, GL_RGBA, GL_UNSIGNED_INT_8_8_8_8_REV,
+  glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, 256, 1, 0, GL_RGBA, GL_UNSIGNED_INT_8_8_8_8_REV,
                slime_data.data());
-  glTexParameteri(GL_TEXTURE_1D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-  glTexParameteri(GL_TEXTURE_1D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
   glBindTexture(GL_TEXTURE_2D, 0);
 
   shader.activate();
@@ -2959,7 +2959,7 @@ void TextureAnimator::run_slime(const SlimeInput& input) {
     glUniform2fv(m_uniforms.uvs, 4, uv);
 
     glActiveTexture(GL_TEXTURE10);
-    glBindTexture(GL_TEXTURE_1D, m_slime_lut_texture);
+    glBindTexture(GL_TEXTURE_2D, m_slime_lut_texture);
     glActiveTexture(GL_TEXTURE0);
 
     // Anim 1:
