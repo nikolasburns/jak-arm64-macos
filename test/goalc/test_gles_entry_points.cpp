@@ -144,6 +144,32 @@ TEST(GlesEntryPoints, NoSingularDrawBuffer) {
   }
 }
 
+// glMultiDrawElements (and glMultiDrawArrays) are desktop GL 1.4+ and do NOT
+// exist in GLES 3.0. ANGLE exports only the suffixed forms
+// (glMultiDrawElementsEXT / ...ANGLE / ...BaseVertexEXT) and never the bare
+// name, so glad resolves the unsuffixed symbol against AppleGL -- which then
+// faults inside libGL.dylib with an EGL context current, exactly like the
+// gladLoadGL and imgui-loader defects before it.
+//
+// DISABLED_ because the 7 call sites are session 3.8's deliverable. This is a
+// deliberately-red test kept in the tree so the item cannot be lost: drop the
+// DISABLED_ prefix once the sites are routed through an extension helper.
+TEST(GlesEntryPoints, DISABLED_NoUnsuffixedMultiDraw) {
+  const auto sources = graphics_sources();
+  ASSERT_FALSE(sources.empty()) << "found no graphics sources to scan";
+
+  for (const auto& src : sources) {
+    EXPECT_FALSE(calls(src.text, "glMultiDrawElements"))
+        << src.name
+        << " calls glMultiDrawElements(), which does not exist in GLES 3.0."
+           " ANGLE exports only glMultiDrawElementsEXT/ANGLE. Route it through"
+           " an extension entry point, and verify the suffixed form is usable"
+           " in a GLES 3.0 context rather than merely exported.";
+    EXPECT_FALSE(calls(src.text, "glMultiDrawArrays"))
+        << src.name << " calls glMultiDrawArrays(), which does not exist in GLES 3.0.";
+  }
+}
+
 // Guards the scanner itself. If a refactor moves the graphics tree or changes
 // the extensions, the rules above must not pass by finding nothing to check --
 // a green test over an empty corpus is the failure mode these exist to prevent.
