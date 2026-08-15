@@ -365,7 +365,7 @@ void Shrub::render_tree(int idx,
       glDrawElements(GL_TRIANGLE_STRIP, singledraw_indices.second, GL_UNSIGNED_INT,
                      (void*)(singledraw_indices.first * sizeof(u32)));
     } else {
-      glMultiDrawElements(GL_TRIANGLE_STRIP,
+      multi_draw_elements(GL_TRIANGLE_STRIP,
                           &m_cache.multidraw_count_buffer[multidraw_indices.first], GL_UNSIGNED_INT,
                           &m_cache.multidraw_index_offset_buffer[multidraw_indices.first],
                           multidraw_indices.second);
@@ -386,7 +386,7 @@ void Shrub::render_tree(int idx,
           glDrawElements(GL_TRIANGLE_STRIP, singledraw_indices.second, GL_UNSIGNED_INT,
                          (void*)(singledraw_indices.first * sizeof(u32)));
         } else {
-          glMultiDrawElements(
+          multi_draw_elements(
               GL_TRIANGLE_STRIP, &m_cache.multidraw_count_buffer[multidraw_indices.first],
               GL_UNSIGNED_INT, &m_cache.multidraw_index_offset_buffer[multidraw_indices.first],
               multidraw_indices.second);

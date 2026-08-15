@@ -602,7 +602,7 @@ void Tie3::draw_matching_draws_for_tree(int idx,
       glDrawElements(tree.draw_mode, singledraw_indices.second, GL_UNSIGNED_INT,
                      (void*)(singledraw_indices.first * sizeof(u32)));
     } else {
-      glMultiDrawElements(
+      multi_draw_elements(
           tree.draw_mode, &tree.multidraw_count_buffer[multidraw_indices.first], GL_UNSIGNED_INT,
           &tree.multidraw_index_offset_buffer[multidraw_indices.first], multidraw_indices.second);
     }
@@ -622,7 +622,7 @@ void Tie3::draw_matching_draws_for_tree(int idx,
           glDrawElements(tree.draw_mode, singledraw_indices.second, GL_UNSIGNED_INT,
                          (void*)(singledraw_indices.first * sizeof(u32)));
         } else {
-          glMultiDrawElements(tree.draw_mode, &tree.multidraw_count_buffer[multidraw_indices.first],
+          multi_draw_elements(tree.draw_mode, &tree.multidraw_count_buffer[multidraw_indices.first],
                               GL_UNSIGNED_INT,
                               &tree.multidraw_index_offset_buffer[multidraw_indices.first],
                               multidraw_indices.second);
@@ -695,7 +695,7 @@ void Tie3::envmap_second_pass_draw(const Tree& tree,
       glDrawElements(tree.draw_mode, singledraw_indices.second, GL_UNSIGNED_INT,
                      (void*)(singledraw_indices.first * sizeof(u32)));
     } else {
-      glMultiDrawElements(
+      multi_draw_elements(
           tree.draw_mode, &tree.multidraw_count_buffer[multidraw_indices.first], GL_UNSIGNED_INT,
           &tree.multidraw_index_offset_buffer[multidraw_indices.first], multidraw_indices.second);
     }

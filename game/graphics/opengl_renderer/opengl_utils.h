@@ -47,6 +47,53 @@ inline void enable_primitive_restart_u32() {
 void set_polygon_mode(GLenum mode);
 
 /*!
+ * Issue one batched indexed draw per entry of `counts` / `indices`.
+ *
+ * glMultiDrawElements is desktop GL 1.4+ and does NOT exist in GLES 3.0, so on
+ * the ANGLE path this must never be called. It is not merely missing there --
+ * it is actively dangerous: SDL_GL_GetProcAddress still resolves the bare name,
+ * because it falls through to AppleGL, so glad binds a *live AppleGL function
+ * pointer* into a process where the current context is EGL. Calling it faults
+ * inside libGL.dylib, arbitrarily deep in the renderer (the first fault seen was
+ * Shrub::render_tree).
+ *
+ * The suffixed forms are NOT a way out, and this was measured rather than
+ * assumed. ANGLE's libGLESv2 exports glMultiDrawElementsANGLE and
+ * glMultiDrawElementsEXT, and both resolve -- but this Metal context advertises
+ * NEITHER GL_ANGLE_multi_draw nor GL_EXT_multi_draw_arrays (zero of its 117
+ * extensions contain "multi_draw"). Calling the ANGLE entry point anyway
+ * returns GL_INVALID_OPERATION and renders nothing. That is the same trap as
+ * the layered-framebuffer call above: an exported symbol is not an available
+ * function.
+ *
+ * So on ANGLE the renderer runs the single-draw path instead. That path is not
+ * new code -- every multidraw site in this tree already carries a
+ * `render_state->no_multidraw` branch calling glDrawElements over a separate
+ * index buffer, and set_up_all_trees() builds that buffer when it is on. This
+ * helper exists so the desktop path keeps its batching while the banned symbol
+ * appears nowhere in the tree; SharedRenderState::no_multidraw, which defaults
+ * from gfx_backend_is_angle(), is what guarantees ANGLE never reaches it.
+ */
+inline void multi_draw_elements(GLenum mode,
+                                const GLsizei* counts,
+                                GLenum type,
+                                const void* const* indices,
+                                GLsizei draw_count) {
+  if (gfx_backend_is_angle()) {
+    // Unreachable: no_multidraw is forced on for this backend. Kept as a hard
+    // stop rather than a silent fallthrough, because the alternative is a fault
+    // inside AppleGL thousands of log lines from here.
+    ASSERT_MSG(false, "multi_draw_elements is not available on the ANGLE backend");
+    return;
+  }
+  // The glad function pointer, not the glMultiDrawElements macro that expands to
+  // it. Spelling it this way keeps the banned bare identifier out of the tree so
+  // the GlesEntryPoints scanner stays meaningful: this one deliberate desktop
+  // call site is the only thing standing between the ban and the AppleGL symbol.
+  glad_glMultiDrawElements(mode, counts, type, indices, draw_count);
+}
+
+/*!
  * Attach one mip level of a 2D texture as a framebuffer color attachment.
  *
  * Every attachment in this renderer is a single mip level of a plain

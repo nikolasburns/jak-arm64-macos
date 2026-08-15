@@ -487,7 +487,7 @@ void TFragment::render_tree(int geom,
       glDrawElements(tree.draw_mode, singledraw_indices.second, GL_UNSIGNED_INT,
                      (void*)(singledraw_indices.first * sizeof(u32)));
     } else {
-      glMultiDrawElements(tree.draw_mode, &m_cache.multidraw_count_buffer[multidraw_indices.first],
+      multi_draw_elements(tree.draw_mode, &m_cache.multidraw_count_buffer[multidraw_indices.first],
                           GL_UNSIGNED_INT,
                           &m_cache.multidraw_index_offset_buffer[multidraw_indices.first],
                           multidraw_indices.second);
@@ -507,7 +507,7 @@ void TFragment::render_tree(int geom,
           glDrawElements(tree.draw_mode, singledraw_indices.second, GL_UNSIGNED_INT,
                          (void*)(singledraw_indices.first * sizeof(u32)));
         } else {
-          glMultiDrawElements(
+          multi_draw_elements(
               tree.draw_mode, &m_cache.multidraw_count_buffer[multidraw_indices.first],
               GL_UNSIGNED_INT, &m_cache.multidraw_index_offset_buffer[multidraw_indices.first],
               multidraw_indices.second);

@@ -151,10 +151,16 @@ TEST(GlesEntryPoints, NoSingularDrawBuffer) {
 // faults inside libGL.dylib with an EGL context current, exactly like the
 // gladLoadGL and imgui-loader defects before it.
 //
-// DISABLED_ because the 7 call sites are session 3.8's deliverable. This is a
-// deliberately-red test kept in the tree so the item cannot be lost: drop the
-// DISABLED_ prefix once the sites are routed through an extension helper.
-TEST(GlesEntryPoints, DISABLED_NoUnsuffixedMultiDraw) {
+// The suffixed forms are NOT the fix, and that was measured rather than
+// reasoned. On the ANGLE-Metal context this build actually creates,
+// glMultiDrawElementsANGLE *resolves* but the context advertises neither
+// GL_ANGLE_multi_draw nor GL_EXT_multi_draw_arrays -- zero of its 117
+// extensions contain "multi_draw" -- and calling it returns
+// GL_INVALID_OPERATION having drawn nothing. So the renderer takes its
+// pre-existing single-draw path on ANGLE instead (SharedRenderState::
+// no_multidraw defaults from the backend), and the one remaining desktop call
+// lives behind multi_draw_elements() in opengl_utils.h.
+TEST(GlesEntryPoints, NoUnsuffixedMultiDraw) {
   const auto sources = graphics_sources();
   ASSERT_FALSE(sources.empty()) << "found no graphics sources to scan";
 
@@ -185,4 +191,17 @@ TEST(GlesEntryPoints, ScannerSeesTheAttachmentSites) {
   }
   EXPECT_GE(attachment_sites, 2) << "expected the shared helper plus at least one direct caller;"
                                     " the scan is probably looking at the wrong tree";
+
+  // Same guard for the multidraw rule. The batched draws are real and must stay
+  // routed through the helper -- if these vanish, NoUnsuffixedMultiDraw above is
+  // passing over nothing rather than over correct code.
+  int multidraw_sites = 0;
+  for (const auto& src : sources) {
+    if (calls(src.text, "multi_draw_elements")) {
+      ++multidraw_sites;
+    }
+  }
+  EXPECT_GE(multidraw_sites, 2) << "expected the shared helper plus the background renderers"
+                                   " (Shrub/Tie3/TFragment) to call multi_draw_elements();"
+                                   " the scan is probably looking at the wrong tree";
 }
