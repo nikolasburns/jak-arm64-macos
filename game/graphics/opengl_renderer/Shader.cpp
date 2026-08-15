@@ -33,6 +33,10 @@ std::string shader_prologue(ShaderBackend backend, bool is_fragment) {
 
 }  // namespace
 
+std::string shader_prologue_for_test(ShaderBackend backend, bool is_fragment) {
+  return shader_prologue(backend, is_fragment);
+}
+
 Shader::Shader(const std::string& shader_name, GameVersion version) : m_name(shader_name) {
   const std::string height_scale = version == GameVersion::Jak1 ? "1.0" : "0.5";
   const std::string scissor_height = version == GameVersion::Jak1 ? "448.0" : "416.0";

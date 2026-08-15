@@ -20,6 +20,10 @@ enum class ShaderBackend {
 // runtime toggle lands; AppleGL keeps the existing path byte-for-byte.
 constexpr ShaderBackend kShaderBackend = ShaderBackend::AppleGL;
 
+// The dialect prologue Shader::Shader prepends as line 1 of every shader.
+// Exposed so the dialect contract can be tested without a GL context.
+std::string shader_prologue_for_test(ShaderBackend backend, bool is_fragment);
+
 class Shader {
  public:
   static constexpr char shader_folder[] = "game/graphics/opengl_renderer/shaders/";
