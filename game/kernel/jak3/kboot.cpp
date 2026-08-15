@@ -94,7 +94,13 @@ s32 goal_main(int argc, const char* const* argv) {
 
 void KernelDispatch(u32 dispatcher_func) {
   // place our stack at the end of EE memory
+#if defined(__aarch64__)
+  // AArch64 requires SP to be 16-byte aligned; -8 would leave it at 8 mod 16
+  // and fault with EXC_ARM_SP_ALIGN on the first push.
+  u64 goal_stack = u64(g_ee_main_mem) + EE_MAIN_MEM_SIZE - 16;
+#else
   u64 goal_stack = u64(g_ee_main_mem) + EE_MAIN_MEM_SIZE - 8;
+#endif
 
   // try to get a message from the listener, and process it if needed
   Ptr<char> new_message = WaitForMessageAndAck();

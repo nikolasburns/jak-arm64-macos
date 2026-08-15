@@ -386,6 +386,7 @@
                )
            )
          (rlet ((temp)
+                (arm-temp :reg rax)
                 (func)
                 (sp :reg rsp :type uint)
                 (off :reg r15 :type uint)
@@ -410,7 +411,17 @@
            ;; push the return trampoline for when code returns.
            (.mov temp return-from-thread-dead) ;; will deactivate
            (.add temp off)
-           (.push temp)
+           ;; `.push` is lowered to `mov x30, x8` only when the source is the
+           ;; rax role (ARM64 x8). An unconstrained `temp` gets an arbitrary
+           ;; register, so the push would emit a real stack store and x30
+           ;; would never be loaded — the state's `code` would run with a
+           ;; stale/zero link register. Route through an rax-bound temp.
+           (#if ARM64_TARGET
+             (begin
+               (.mov arm-temp temp)
+               (.push :color #f arm-temp))
+             (.push temp)
+             )
            ;; and call!
            (.jr func)
            ;; stupid hack so the compiler doesn't throw away these registers.

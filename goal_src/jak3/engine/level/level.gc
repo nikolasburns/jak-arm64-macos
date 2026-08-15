@@ -15,8 +15,22 @@
 
 (defglobalconstant LEVEL_HEAP_SIZE (* NUM_LEVEL_PAGES LEVEL_PAGE_SIZE))
 ;(defglobalconstant DEBUG_LEVEL_HEAP_MULT 1.5) ;; level heap in debug mode is 1.5x larger
-(defglobalconstant DEBUG_LEVEL_HEAP_MULT 1.2) ;; we're gonna use debug mode-style heaps but we don't actually need them at 1.5x size right now
-(defglobalconstant DEBUG_LEVEL_PAGE_SIZE (* 1024 (* DEBUG_LEVEL_HEAP_MULT LEVEL_PAGE_SIZE_KB)))
+;; ARM64 function/data objects are larger than the x86-64 objects and need more
+;; room inside each level bank. Measured against a freshly built x86 tree
+;; (2026-08-14): jak3 code objects are 2.4-2.7x their x86 size and the most
+;; code-dense level DGOs reach 3.28x, though the MEDIAN DGO is 1.00x because
+;; arch-neutral art dominates most of them. 1.75x is the value jak1 and jak2
+;; already ship on this target and leaves ~19 MB of headroom over the largest
+;; jak3 DGO (VOCA, 13.8 MB). jak3 allocates ONE shared level heap (see the
+;; kmalloc at the bottom of this file), so the cost is 31.4 MB of the 112 MB
+;; ARM64 global heap, not LEVEL_MAX times that. Keep the x86 multiplier as-is.
+(defglobalconstant DEBUG_LEVEL_HEAP_MULT (#if ARM64_TARGET 1.75 1.2)) ;; we're gonna use debug mode-style heaps but we don't actually need them at 1.5x size right now
+;; Keep the ARM64 page size integral. The float-derived value is preserved for
+;; the existing x86 path, but using it in integer pointer arithmetic makes the
+;; ARM64 emitter/runtime boundary ambiguous (jak2 needed this same change).
+(defglobalconstant DEBUG_LEVEL_PAGE_SIZE
+  (#if ARM64_TARGET (/ (* LEVEL_PAGE_SIZE 7) 4)
+                    (* 1024 (* DEBUG_LEVEL_HEAP_MULT LEVEL_PAGE_SIZE_KB))))
 (defglobalconstant DEBUG_LEVEL_HEAP_SIZE (* NUM_LEVEL_PAGES DEBUG_LEVEL_PAGE_SIZE))
 
 ;; multiplier for borrow heap size. It is a bit of a hack required to load the slightly larger PC port levels.

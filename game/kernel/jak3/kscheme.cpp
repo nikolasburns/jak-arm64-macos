@@ -4,10 +4,12 @@
 
 #include "common/common_types.h"
 #include "common/goal_constants.h"
+#include "common/jit_memory.h"
 #include "common/log/log.h"
 #include "common/symbols.h"
 
 #include "game/kernel/common/Symbol4.h"
+#include "game/kernel/common/arm64_trampoline.h"
 #include "game/kernel/common/fileio.h"
 #include "game/kernel/common/kdsnetm.h"
 #include "game/kernel/common/klink.h"
@@ -73,26 +75,37 @@ u64 new_illegal(u32 allocation, u32 type) {
 
 u64 alloc_from_heap(u32 heap_symbol, u32 type, s32 size, u32 pp) {
   auto heap_ptr = Ptr<Symbol4<Ptr<kheapinfo>>>(heap_symbol)->value();
+
+  u32 allocation_flags = KMALLOC_MEMSET;
+#if defined(__APPLE__) && defined(__aarch64__)
+  // The function type is allocated before its GOAL symbol is initialized, so this check must
+  // happen before the type metadata fast paths below. Without this the trampolines built by
+  // make_function_from_c_* land on non-executable pages under W^X.
+  if (type && type == u32_in_fixed_sym(FIX_SYM_FUNCTION_TYPE)) {
+    allocation_flags |= KMALLOC_EXECUTABLE;
+  }
+#endif
+
   s32 aligned_size = ((size + 0xf) / 0x10) * 0x10;
   if ((heap_symbol == s7.offset + FIX_SYM_GLOBAL_HEAP) ||
       (heap_symbol == s7.offset + FIX_SYM_DEBUG) ||
       (heap_symbol == s7.offset + FIX_SYM_LOADING_LEVEL) ||
       (heap_symbol == s7.offset + FIX_SYM_PROCESS_LEVEL_HEAP)) {
     if (!type) {  // no type given, just call it a global-object
-      return kmalloc(heap_ptr, size, KMALLOC_MEMSET, "global-object").offset;
+      return kmalloc(heap_ptr, size, allocation_flags, "global-object").offset;
     }
 
     Ptr<Type> typ(type);
     if (!typ->symbol.offset) {  // type doesn't have a symbol, just call it a global-object
-      return kmalloc(heap_ptr, size, KMALLOC_MEMSET, "global-object").offset;
+      return kmalloc(heap_ptr, size, allocation_flags, "global-object").offset;
     }
 
     Ptr<String> gstr = sym_to_string(typ->symbol);
     if (!gstr->len) {  // string has nothing in it.
-      return kmalloc(heap_ptr, size, KMALLOC_MEMSET, "global-object").offset;
+      return kmalloc(heap_ptr, size, allocation_flags, "global-object").offset;
     }
 
-    return kmalloc(heap_ptr, size, KMALLOC_MEMSET, gstr->data()).offset;
+    return kmalloc(heap_ptr, size, allocation_flags, gstr->data()).offset;
   } else if (heap_symbol == s7.offset + FIX_SYM_PROCESS_TYPE) {
     u32 start = *Ptr<u32>(pp + 0x64);
     u32 heapEnd = *Ptr<u32>(pp + 0x60);
@@ -291,17 +304,28 @@ void _stack_call_arm64();
  * But calling this function is fast. It used to be really fast but wrong.
  */
 Ptr<Function> make_function_from_c_systemv(void* func, bool arg3_is_pp) {
+#if defined(__aarch64__)
+  if (g_ee_main_mem && kglobalheap.offset) {
+    jit_memory::make_writable(kglobalheap->current.c(), 0x40);
+  }
+#endif
   auto mem = Ptr<u8>(alloc_heap_object(s7.offset + FIX_SYM_GLOBAL_HEAP,
                                        u32_in_fixed_sym(FIX_SYM_FUNCTION_TYPE), 0x40, UNKNOWN_PP));
+#if defined(__aarch64__)
+  // Upstream selected an ARM64 bridge address here but still emitted the x86
+  // byte sequence below, so the trampoline was raw x86 opcodes executed by an
+  // ARM64 CPU (SIGILL on first call). Emit real ARM64 instead.
+  jit_memory::JitWriteScope scope(mem.c(), 0x40);
+  const auto code_size = arm64_trampoline::emit_c_function(
+      mem.c(), func, reinterpret_cast<void*>(reinterpret_cast<uintptr_t>(_arg_call_arm64)),
+      arg3_is_pp);
+  scope.flush_instruction_cache();
+  (void)code_size;
+#else
   auto f = (uint64_t)func;
   auto target_function = (u8*)&f;
-#ifndef __aarch64__
   auto trampoline_function_addr = _arg_call_systemv;
-#else
-  auto trampoline_function_addr = _arg_call_arm64;
-#endif
   auto trampoline = (u8*)&trampoline_function_addr;
-  // TODO - x86 code still being emitted below
 
   // movabs rax, target_function
   int offset = 0;
@@ -334,6 +358,7 @@ Ptr<Function> make_function_from_c_systemv(void* func, bool arg3_is_pp) {
   // the asm function's ret will return to the caller of this (GOAL code) directlyz.
 
   // CacheFlush(mem, 0x34);
+#endif
 
   return mem.cast<Function>();
 }
@@ -402,16 +427,26 @@ Ptr<Function> make_function_from_c_win32(void* func, bool arg3_is_pp) {
 }
 
 Ptr<Function> make_stack_arg_function_from_c_systemv(void* func) {
+#if defined(__aarch64__)
+  if (g_ee_main_mem && kglobalheap.offset) {
+    jit_memory::make_writable(kglobalheap->current.c(), 0x40);
+  }
+#endif
   // allocate a function object on the global heap
   auto mem = Ptr<u8>(alloc_heap_object(s7.offset + FIX_SYM_GLOBAL_HEAP,
                                        u32_in_fixed_sym(FIX_SYM_FUNCTION_TYPE), 0x40, UNKNOWN_PP));
+#if defined(__aarch64__)
+  // Same defect as make_function_from_c_systemv: an ARM64 bridge address was
+  // selected but x86 opcodes were emitted to reach it.
+  jit_memory::JitWriteScope scope(mem.c(), 0x40);
+  const auto code_size = arm64_trampoline::emit_stack_function(
+      mem.c(), func, reinterpret_cast<void*>(reinterpret_cast<uintptr_t>(_stack_call_arm64)));
+  scope.flush_instruction_cache();
+  (void)code_size;
+#else
   auto f = (uint64_t)func;
   auto target_function = (u8*)&f;
-#ifndef __aarch64__
   auto trampoline_function_addr = _stack_call_systemv;
-#else
-  auto trampoline_function_addr = _stack_call_arm64;
-#endif
   auto trampoline = (u8*)&trampoline_function_addr;
 
   // movabs rax, target_function
@@ -437,6 +472,7 @@ Ptr<Function> make_stack_arg_function_from_c_systemv(void* func) {
   mem.c()[offset++] = 0xe0;
 
   // CacheFlush(mem, 0x34);
+#endif
 
   return mem.cast<Function>();
 }

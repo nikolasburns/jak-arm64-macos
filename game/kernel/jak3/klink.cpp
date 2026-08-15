@@ -2,6 +2,8 @@
 
 #include "common/common_types.h"
 #include "common/goal_constants.h"
+#include "common/jit_memory.h"
+#include "common/link_types.h"
 #include "common/symbols.h"
 
 #include "game/kernel/common/fileio.h"
@@ -625,7 +627,9 @@ uint32_t link_control::jak3_work_opengoal() {
           } else {
             Ptr<u8> src(ofh->code_infos[seg_id].offset);
             ofh->code_infos[seg_id].offset =
-                kmalloc(kdebugheap, ofh->code_infos[seg_id].size, 0, "debug-segment").offset;
+                kmalloc(kdebugheap, ofh->code_infos[seg_id].size, KMALLOC_EXECUTABLE,
+                        "debug-segment")
+                    .offset;
             if (ofh->code_infos[seg_id].offset == 0) {
               MsgErr("dkernel: unable to malloc %d bytes for debug-segment\n",
                      ofh->code_infos[seg_id].size);
@@ -641,7 +645,8 @@ uint32_t link_control::jak3_work_opengoal() {
         } else {
           Ptr<u8> src(ofh->code_infos[seg_id].offset);
           ofh->code_infos[seg_id].offset =
-              kmalloc(m_heap, ofh->code_infos[seg_id].size, 0, "main-segment").offset;
+              kmalloc(m_heap, ofh->code_infos[seg_id].size, KMALLOC_EXECUTABLE, "main-segment")
+                  .offset;
           if (ofh->code_infos[seg_id].offset == 0) {
             MsgErr("dkernel: unable to malloc %d bytes for main-segment\n",
                    ofh->code_infos[seg_id].size);
@@ -655,8 +660,9 @@ uint32_t link_control::jak3_work_opengoal() {
           ofh->code_infos[seg_id].offset = 0;
         } else {
           Ptr<u8> src(ofh->code_infos[seg_id].offset);
+          constexpr u32 top_level_flags = KMALLOC_TOP | KMALLOC_EXECUTABLE;
           ofh->code_infos[seg_id].offset =
-              kmalloc(m_heap, ofh->code_infos[seg_id].size, KMALLOC_TOP, "top-level-segment")
+              kmalloc(m_heap, ofh->code_infos[seg_id].size, top_level_flags, "top-level-segment")
                   .offset;
           if (ofh->code_infos[seg_id].offset == 0) {
             MsgErr("dkernel: unable to malloc %d bytes for top-level-segment\n",
@@ -730,6 +736,32 @@ uint32_t link_control::jak3_work_opengoal() {
 
 void link_control::jak3_finish(bool jump_from_c_to_goal) {
   // CacheFlush(this->m_ptr_2, this->m_code_size);
+#if defined(__APPLE__) && defined(__aarch64__)
+  // W^X transition. Version 3 objects (the only ones our ARM64 goalc emits as
+  // executable code; v5 is PS2 data and !m_opengoal) move each code segment
+  // into the GOAL heap, so m_code_start/m_code_size do not describe the final
+  // executable ranges -- walk the per-segment code_infos instead. Without this
+  // the linked code stays non-executable and the first call into it faults.
+  if (m_version == 3) {
+    ObjectFileHeader* ofh = m_link_block_ptr.cast<ObjectFileHeader>().c();
+    for (u32 segment = 0; segment < ofh->segment_count; ++segment) {
+      const auto& code = ofh->code_infos[segment];
+      if (code.offset && code.size) {
+        size_t executable_size = code.size;
+        // Every segment legitimately has a data tail; the linker marks the
+        // page-aligned start of static data with this flag so we only mark the
+        // real instruction bytes executable.
+        const u32 link_metadata = ofh->link_infos[segment].size;
+        if (link_metadata & LINK_ARM64_EXECUTABLE_SIZE_FLAG) {
+          executable_size = link_metadata & ~LINK_ARM64_EXECUTABLE_SIZE_FLAG;
+        }
+        if (executable_size) {
+          jit_memory::make_executable(Ptr<u8>(code.offset).c(), executable_size);
+        }
+      }
+    }
+  }
+#endif
   auto old_debug_segment = DebugSegment;
   if (m_keep_debug) {
     // note - this probably doesn't work because DebugSegment isn't *debug-segment*.
@@ -754,7 +786,12 @@ void link_control::jak3_finish(bool jump_from_c_to_goal) {
     // execute top level!
     if (m_entry.offset && (m_flags & LINK_FLAG_EXECUTE)) {
       if (jump_from_c_to_goal) {
+#if defined(__aarch64__)
+        // AArch64 requires a 16-byte aligned SP; see KernelDispatch in kboot.cpp.
+        u64 goal_stack = u64(g_ee_main_mem) + EE_MAIN_MEM_SIZE - 16;
+#else
         u64 goal_stack = u64(g_ee_main_mem) + EE_MAIN_MEM_SIZE - 8;
+#endif
         call_goal_on_stack(m_entry.cast<Function>(), goal_stack, s7.offset, g_ee_main_mem);
       } else {
         call_goal(m_entry.cast<Function>(), 0, 0, 0, s7.offset, g_ee_main_mem);

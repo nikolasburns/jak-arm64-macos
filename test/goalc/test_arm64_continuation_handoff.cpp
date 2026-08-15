@@ -182,6 +182,23 @@ TEST(Arm64ContinuationHandoff, PushIdiomLoweringTable) {
        "defect; must stay a plain stack push"},
       {X9, false, "(.push <scratch>) -- ordinary stack traffic"},
       {X19, false, "(.push <callee-saved>) -- ordinary stack traffic"},
+      // Added for the Jak 3 kernel port. The context routines deliberately hold
+      // the kernel continuation in `(saved-lr :reg r9)`, whose ARM64 role is X5,
+      // BECAUSE it must occupy a REAL stack slot -- the rax/X8 role would be
+      // diverted into `mov x30, x8` and never reach memory, so the matching
+      // `.pop` in return-from-thread / thread-suspend would read garbage.
+      // If X5 ever gained the x30-install behaviour, every context switch would
+      // silently lose its continuation. Pin it.
+      {X5, false,
+       "(.push saved-lr) where saved-lr is :reg r9 (ARM64 X5) -- the kernel "
+       "continuation slot in return-from-thread, return-from-thread-dead, "
+       "reset-and-call, thread-suspend and thread-resume; MUST be a real stack "
+       "slot so the paired .pop can recover it"},
+      // The two saved GPRs that exist only on ARM64 (s5/s6 in
+      // with-context-extra-saved-gprs). They are pushed/popped around every
+      // context switch and must be ordinary stack traffic.
+      {X27, false, "(.push s5) -- ARM64-only saved GPR, with-context-extra-saved-gprs"},
+      {X28, false, "(.push s6) -- ARM64-only saved GPR, with-context-extra-saved-gprs"},
   };
 
   for (const auto& row : rows) {

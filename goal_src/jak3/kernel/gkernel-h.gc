@@ -12,7 +12,13 @@
 (defconstant *kernel-major-version* 2)
 (defconstant *kernel-minor-version* 0)
 
-(defconstant DPROCESS_STACK_SIZE (#if PC_PORT #x10000 #x3800))
+;; ARM64 generated code has a larger aligned frame/register-save footprint than
+;; x86-64, so the process (dram) stack needs the same uplift jak1 and jak2 both
+;; carry on this target. x86 values are unchanged.
+(defconstant DPROCESS_STACK_SIZE
+  (#if PC_PORT
+       (#if ARM64_TARGET #x800000 #x10000)
+       #x3800))
 (defconstant PROCESS_STACK_SIZE (#if PC_PORT #x8000 #x1c00))
 
 (#if PC_BIG_MEMORY
