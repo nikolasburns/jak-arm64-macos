@@ -154,59 +154,35 @@ For Jak 2, substitute `jak2` throughout.
 
 ## Package as a standalone `.app`
 
-Once a game compiles and runs, you can wrap it into a double-clickable macOS
-app that no longer needs this checkout:
+Wrap a compiled game into a double-clickable app that no longer needs this
+checkout:
 
 ```sh
 ./scripts/package-app.sh jak1        # -> /Applications/Jak 1.app
 ./scripts/package-app.sh jak2        # -> /Applications/Jak 2.app
 ```
 
-Pass a second argument to install somewhere else, e.g.
-`./scripts/package-app.sh jak1 ~/Applications`. If `/Applications` is not
-writable on your machine, the script says so up front rather than failing
-partway through a multi-gigabyte copy; re-run it with `sudo` or choose another
-directory.
-
-The bundle embeds the compiled game data from `out/<game>-arm64`, the OpenGL
-shaders, fonts and assets, and every non-system dylib — so it keeps working if
-this repository is moved or deleted, and on a Mac that never had the build tree.
-
-Dependency bundling is the default. Pass `--no-bundle-deps` to skip it for fast
-repackaging on the build machine; the script warns that the result will not
-launch anywhere else.
-
-`gk` is a JIT, so the script signs it with `com.apple.security.cs.allow-jit`.
-Without that entitlement macOS refuses the launch outright — the icon bounces in
-the Dock and the app quits **with no crash report**, because nothing ever ran.
-Bundles produced this way have been copied to a second Apple Silicon Mac and
-launched by double-click, with no build tree, Homebrew, or developer tooling on
-it.
-
-If the first launch is blocked by Gatekeeper, approve it once in **System
-Settings → Privacy & Security**, or clear the quarantine flag:
+Add a second argument to install elsewhere, or `--no-bundle-deps` to skip dylib
+packaging — faster, but the result runs only on this machine:
 
 ```sh
-xattr -dr com.apple.quarantine "/Applications/Jak 1.app"
+./scripts/package-app.sh jak1 ~/Applications --no-bundle-deps
 ```
 
-Do **not** launch it with `sudo`: `$HOME` then resolves to `/var/root` and the
-runtime looks for its logs in the wrong place.
+The bundle embeds the game data, shaders, assets and every non-system dylib, and
+is ad-hoc signed with the JIT entitlement `gk` needs. Copy it to any Apple
+Silicon Mac and it runs; no build tree or Homebrew required. If Gatekeeper blocks
+the first launch, approve it in **System Settings → Privacy & Security** or run
+`xattr -dr com.apple.quarantine "/Applications/Jak 1.app"`. Don't launch it with
+`sudo`.
 
-Saves and settings stay in `~/Library/Application Support/OpenGOAL/<game>/`,
-shared with the plain `gk` binary, and the runtime's log and `imgui.ini` are
-symlinked there too so that nothing is ever written inside the `.app` (which
-would otherwise invalidate its code signature on first launch).
+Saves and settings live in `~/Library/Application Support/OpenGOAL/<game>/`,
+shared with the plain `gk` binary.
 
-Expect a multi-gigabyte bundle — the compiled assets dominate, and an HD texture
-pack adds several gigabytes more (with both packs installed, roughly 3.7 GB for
-Jak 1 and 9.6 GB for Jak 2). The bundled dylibs are a rounding error at ~18 MB.
-Bundles are ad-hoc signed (`codesign -s -`) for local use; they are **not**
-notarized and are not intended for distribution, since the embedded assets are
-derived from your own disc.
-
-Bundles are snapshots. After any `(mi)` or asset change, re-run the script to
-refresh them.
+Expect several gigabytes — roughly 3.7 GB for Jak 1 and 9.6 GB for Jak 2 with
+the HD packs installed. Bundles are snapshots: re-run the script after any
+`(mi)` or asset change. They are **not** notarized and are not for distribution,
+since the embedded assets come from your own disc.
 
 ---
 
