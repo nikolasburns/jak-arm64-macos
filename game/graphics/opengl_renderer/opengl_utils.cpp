@@ -116,7 +116,23 @@ FramebufferTexturePairContext::FramebufferTexturePairContext(FramebufferTextureP
   glGetIntegerv(GL_FRAMEBUFFER_BINDING, &m_old_framebuffer);
   glBindFramebuffer(GL_FRAMEBUFFER, m_fb->m_framebuffers[level]);
   glViewport(0, 0, m_fb->m_w, m_fb->m_h);
-  framebuffer_attach_color_texture(GL_COLOR_ATTACHMENT0, m_fb->m_texture, level);
+  if (level != 0) {
+    // Re-point attachment 0 at this mip. Only OceanTexture's per-mip loop takes this
+    // path: FramebufferTexturePair's constructor attached level i to
+    // GL_COLOR_ATTACHMENT0 + i, so for i > 0 attachment 0 is not yet this level and
+    // the re-attach is what actually makes the framebuffer render to the mip.
+    //
+    // For level 0 it is skipped, because there it re-attaches exactly what the pair's
+    // constructor already attached and checked complete. Re-attaching a color texture
+    // to the framebuffer that was just bound as the draw target is a no-op on desktop
+    // GL but not on ANGLE-Metal: the next command that syncs draw-framebuffer state
+    // (glClearBufferfv in EyeRenderer::run_gpu) goes through
+    // onDrawFrameBufferChangedState -> endEncoding, flushing a render pass whose
+    // encoder no longer matches its attachments, and that flush faults inside Metal
+    // (AGXG16XFamilyRenderContext drawIndexedPrimitives, null render context). It is
+    // below ANGLE's validation layer, so no GL error is ever raised.
+    framebuffer_attach_color_texture(GL_COLOR_ATTACHMENT0, m_fb->m_texture, level);
+  }
 }
 
 void FramebufferTexturePairContext::switch_to(FramebufferTexturePair& fb) {
@@ -124,7 +140,23 @@ void FramebufferTexturePairContext::switch_to(FramebufferTexturePair& fb) {
     m_fb = &fb;
     glBindFramebuffer(GL_FRAMEBUFFER, m_fb->m_framebuffers[0]);
     glViewport(0, 0, m_fb->m_w, m_fb->m_h);
-    framebuffer_attach_color_texture(GL_COLOR_ATTACHMENT0, m_fb->m_texture, 0);
+    // No color-texture re-attach here, deliberately. FramebufferTexturePair's
+    // constructor already attached m_texture level 0 to GL_COLOR_ATTACHMENT0 of
+    // m_framebuffers[0] and checked the result complete, so repeating it sets the
+    // attachment it already has -- a no-op on desktop GL, which is why it stood.
+    //
+    // On ANGLE-Metal it is not a no-op: it mutates the attachments of the
+    // framebuffer that was just made current, so the next command that touches
+    // draw-framebuffer state (glClearBufferfv, for the eye renderer) sends ANGLE
+    // through onDrawFrameBufferChangedState -> endEncoding to flush the render pass
+    // that is still in flight from the *previous* eye, whose encoder now disagrees
+    // with the attachment it was built against. That flush faults inside Metal
+    // itself, at AGXG16XFamilyRenderContext drawIndexedPrimitives with a null
+    // render context -- past our validation layer, so no GL error is ever set.
+    //
+    // The constructor's attach is left alone: it is what establishes the binding in
+    // the first place, and it attaches level i to GL_COLOR_ATTACHMENT0 + i, which
+    // OceanTexture's per-mip contexts (NUM_MIPS levels) depend on.
   }
 }
 
