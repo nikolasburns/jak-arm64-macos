@@ -3,6 +3,7 @@
 #include "common/log/log.h"
 
 #include "game/graphics/opengl_renderer/AdgifHandler.h"
+#include "game/graphics/opengl_renderer/opengl_utils.h"
 
 SkyBlendGPU::SkyBlendGPU() {
   // generate textures for sky blending
@@ -20,7 +21,7 @@ SkyBlendGPU::SkyBlendGPU() {
                  GL_UNSIGNED_BYTE, 0);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-    glFramebufferTexture(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, m_textures[i], 0);
+    framebuffer_attach_color_texture(GL_COLOR_ATTACHMENT0, m_textures[i], 0);
     GLenum draw_buffers[1] = {GL_COLOR_ATTACHMENT0};
     glDrawBuffers(1, draw_buffers);
     if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) {
@@ -130,7 +131,7 @@ SkyBlendStats SkyBlendGPU::do_sky_blends(DmaFollower& dma,
     // setup for rendering!
     glBindFramebuffer(GL_FRAMEBUFFER, m_framebuffers[buffer_idx]);
     glViewport(0, 0, m_sizes[buffer_idx], m_sizes[buffer_idx]);
-    glFramebufferTexture(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, m_textures[buffer_idx], 0);
+    framebuffer_attach_color_texture(GL_COLOR_ATTACHMENT0, m_textures[buffer_idx], 0);
     render_state->shaders[ShaderId::SKY_BLEND].activate();
 
     // if the first is set, it disables alpha. we can just clear here, so it's easier to find

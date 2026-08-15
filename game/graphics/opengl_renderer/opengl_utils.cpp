@@ -61,7 +61,7 @@ FramebufferTexturePair::FramebufferTexturePair(int w, int h, u64 texture_format,
     glBindTexture(GL_TEXTURE_2D, m_texture);
     // I don't know if we really need to do this. whatever uses this texture should figure it out.
 
-    glFramebufferTexture(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0 + i, m_texture, i);
+    framebuffer_attach_color_texture(GL_COLOR_ATTACHMENT0 + i, m_texture, i);
     GLenum draw_buffers[1] = {GLenum(GL_COLOR_ATTACHMENT0 + i)};
     glDrawBuffers(1, draw_buffers);
     auto status = glCheckFramebufferStatus(GL_FRAMEBUFFER);
@@ -116,7 +116,7 @@ FramebufferTexturePairContext::FramebufferTexturePairContext(FramebufferTextureP
   glGetIntegerv(GL_FRAMEBUFFER_BINDING, &m_old_framebuffer);
   glBindFramebuffer(GL_FRAMEBUFFER, m_fb->m_framebuffers[level]);
   glViewport(0, 0, m_fb->m_w, m_fb->m_h);
-  glFramebufferTexture(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, m_fb->m_texture, level);
+  framebuffer_attach_color_texture(GL_COLOR_ATTACHMENT0, m_fb->m_texture, level);
 }
 
 void FramebufferTexturePairContext::switch_to(FramebufferTexturePair& fb) {
@@ -124,7 +124,7 @@ void FramebufferTexturePairContext::switch_to(FramebufferTexturePair& fb) {
     m_fb = &fb;
     glBindFramebuffer(GL_FRAMEBUFFER, m_fb->m_framebuffers[0]);
     glViewport(0, 0, m_fb->m_w, m_fb->m_h);
-    glFramebufferTexture(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, m_fb->m_texture, 0);
+    framebuffer_attach_color_texture(GL_COLOR_ATTACHMENT0, m_fb->m_texture, 0);
   }
 }
 

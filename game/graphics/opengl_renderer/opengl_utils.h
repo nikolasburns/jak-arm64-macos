@@ -47,6 +47,31 @@ inline void enable_primitive_restart_u32() {
 void set_polygon_mode(GLenum mode);
 
 /*!
+ * Attach one mip level of a 2D texture as a framebuffer color attachment.
+ *
+ * Every attachment in this renderer is a single mip level of a plain
+ * GL_TEXTURE_2D, which is exactly what glFramebufferTexture2D does -- and it is
+ * core in both desktop GL and GLES 3.0.
+ *
+ * glFramebufferTexture (no "2D") is NOT the same call and is not in GLES 3.0.
+ * It is the *layered* attachment entry point, added in desktop GL 3.2 to attach
+ * a whole array/cubemap/3D texture at once for geometry shaders to index with
+ * gl_Layer. On a 2D texture it degenerates to the same result, which is why the
+ * desktop path never noticed the difference.
+ *
+ * The failure mode on GLES is quiet and worth knowing, because it is not the
+ * null-pointer class: ANGLE *exports* glFramebufferTexture (as the
+ * GL_EXT_geometry_shader entry point), so the loader binds it and the call
+ * dispatches normally. ANGLE then rejects it in a GLES 3.0 context, sets an
+ * error nobody reads, and attaches nothing -- so the only symptom is
+ * GL_FRAMEBUFFER_INCOMPLETE_MISSING_ATTACHMENT at the completeness check, one
+ * call later, naming neither the function nor the reason.
+ */
+inline void framebuffer_attach_color_texture(GLenum attachment, GLuint texture, int level) {
+  glFramebufferTexture2D(GL_FRAMEBUFFER, attachment, GL_TEXTURE_2D, texture, level);
+}
+
+/*!
  * This is a wrapper around a framebuffer and texture to make it easier to render to a texture.
  */
 class FramebufferTexturePair {

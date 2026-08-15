@@ -25,6 +25,7 @@ add_executable(goalc-test
         ${CMAKE_CURRENT_LIST_DIR}/test_object_generator_arm64.cpp
         ${CMAKE_CURRENT_LIST_DIR}/test_common_util.cpp
         ${CMAKE_CURRENT_LIST_DIR}/test_build_config.cpp
+        ${CMAKE_CURRENT_LIST_DIR}/goalc/test_gles_entry_points.cpp
         ${CMAKE_CURRENT_LIST_DIR}/goalc/test_shader_dialect.cpp
         ${CMAKE_CURRENT_LIST_DIR}/test_data_memory.cpp
         ${CMAKE_CURRENT_LIST_DIR}/test_aot_function.cpp
