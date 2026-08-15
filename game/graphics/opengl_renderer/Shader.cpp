@@ -1,5 +1,7 @@
 #include "Shader.h"
 
+#include <cstdlib>
+
 #include "common/log/log.h"
 #include "common/util/Assert.h"
 #include "common/util/FileUtil.h"
@@ -16,6 +18,37 @@
 // ESSL 3.00 additionally has no default float precision in the fragment stage,
 // so fragment shaders get explicit `highp` defaults. Desktop GLSL 4.10 has no
 // such requirement and does not accept the ES `es` profile, hence the split.
+namespace {
+// The selected backend. Written once by gfx_backend_init() before any context
+// exists, read-only thereafter (see the header's note on immutability).
+ShaderBackend g_shader_backend = ShaderBackend::AppleGL;
+bool g_backend_selected = false;
+}  // namespace
+
+ShaderBackend gfx_shader_backend() {
+  return g_shader_backend;
+}
+
+ShaderBackend gfx_backend_init() {
+  if (g_backend_selected) {
+    return g_shader_backend;
+  }
+  g_backend_selected = true;
+
+  const char* env = std::getenv("GK_GFX_BACKEND");
+  if (env && std::string(env) == "angle") {
+    g_shader_backend = ShaderBackend::Angle;
+    lg::info("gfx backend: ANGLE (OpenGL ES 3.0 via ANGLE-Metal), from GK_GFX_BACKEND");
+  } else {
+    g_shader_backend = ShaderBackend::AppleGL;
+    if (env && std::string(env) != "applegl") {
+      lg::warn("gfx backend: GK_GFX_BACKEND=\"{}\" not recognized (expected angle|applegl)", env);
+    }
+    lg::info("gfx backend: AppleGL (desktop GL 4.1)");
+  }
+  return g_shader_backend;
+}
+
 std::string shader_prologue(ShaderBackend backend, bool is_fragment) {
   switch (backend) {
     case ShaderBackend::Angle:
@@ -46,8 +79,8 @@ Shader::Shader(const std::string& shader_name, GameVersion version) : m_name(sha
   vert_src = std::regex_replace(vert_src, std::regex("SCISSOR_ADJUST"), "(" + scissor_adjust + ")");
 
   // inject the dialect prologue as line 1 (see shader_prologue above)
-  vert_src = shader_prologue(kShaderBackend, false) + vert_src;
-  frag_src = shader_prologue(kShaderBackend, true) + frag_src;
+  vert_src = shader_prologue(gfx_shader_backend(), false) + vert_src;
+  frag_src = shader_prologue(gfx_shader_backend(), true) + frag_src;
 
   m_vert_shader = glCreateShader(GL_VERTEX_SHADER);
   const char* src = vert_src.c_str();

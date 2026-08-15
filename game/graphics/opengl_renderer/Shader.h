@@ -16,9 +16,27 @@ enum class ShaderBackend {
   Angle,    // OpenGL ES 3.0 via ANGLE-Metal
 };
 
-// The backend the shader loader targets. This is a stub constant until the real
-// runtime toggle lands; AppleGL keeps the existing path byte-for-byte.
-constexpr ShaderBackend kShaderBackend = ShaderBackend::AppleGL;
+// The backend the shader loader targets, selected at runtime.
+//
+// DEFAULT IS AppleGL: absent an explicit request, every path behaves exactly as
+// it did before the ANGLE work, and no ANGLE artifact is loaded or referenced.
+//
+// Selection happens ONCE, before the display is created (gfx_backend_init), and
+// is immutable afterwards -- shaders are compiled against whichever dialect this
+// reports, so a mid-run change would invalidate every already-compiled program.
+ShaderBackend gfx_shader_backend();
+
+// Resolve the backend from the environment. Called once during graphics startup,
+// before any window/context exists. Returns the backend actually selected.
+//
+// GK_GFX_BACKEND=angle|applegl  (unset/unrecognized -> AppleGL)
+ShaderBackend gfx_backend_init();
+
+// True when the ANGLE (GLES 3.0) backend is active. Convenience for the call
+// sites that branch on dialect rather than on shader text.
+inline bool gfx_backend_is_angle() {
+  return gfx_shader_backend() == ShaderBackend::Angle;
+}
 
 // The dialect prologue prepended as line 1 of every shader loaded from disk.
 //

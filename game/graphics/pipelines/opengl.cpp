@@ -97,10 +97,51 @@ struct GraphicsData {
 
 std::unique_ptr<GraphicsData> g_gfx_data;
 
+// Point SDL at the ANGLE libEGL/libGLESv2 to dlopen for the GLES path.
+//
+// NOTHING IS LINKED AGAINST ANGLE. SDL loads both libraries by name at runtime
+// (third-party/SDL/src/video/SDL_egl.c: DEFAULT_EGL / DEFAULT_OGL_ES2, each
+// overridable by hint), so an AppleGL-only build neither references nor requires
+// any ANGLE artifact -- absent them, only the ANGLE path fails, and it fails at
+// context creation with SDL's own error rather than at load time.
+//
+// ANGLE build pinned to commit aa192212af54a9de42a63db84a292b4cbfcaf114
+// ("IR: Validate matrix packing decorations", 2026-08-14). The build recipe --
+// args.gn plus the two environment blockers (DEVELOPER_DIR, MetalToolchain) --
+// is recorded in PROGRESS.md, session 28. libEGL.dylib has install name
+// "./libEGL.dylib", so an ABSOLUTE path is required here; a bare name would only
+// resolve relative to the working directory.
+static void set_angle_library_hints() {
+  // GK_ANGLE_DIR overrides the directory holding libEGL.dylib + libGLESv2.dylib.
+  const char* dir = std::getenv("GK_ANGLE_DIR");
+  if (!dir) {
+    lg::warn(
+        "gfx backend ANGLE: GK_ANGLE_DIR is not set; falling back to SDL's default library "
+        "search. Set it to the directory containing libEGL.dylib and libGLESv2.dylib.");
+    return;
+  }
+  const std::string egl = std::string(dir) + "/libEGL.dylib";
+  const std::string gles = std::string(dir) + "/libGLESv2.dylib";
+  if (!fs::exists(egl) || !fs::exists(gles)) {
+    lg::error("gfx backend ANGLE: GK_ANGLE_DIR=\"{}\" lacks libEGL.dylib and/or libGLESv2.dylib",
+              dir);
+    return;
+  }
+  SDL_SetHint(SDL_HINT_EGL_LIBRARY, egl.c_str());
+  SDL_SetHint(SDL_HINT_OPENGL_LIBRARY, gles.c_str());
+  lg::info("gfx backend ANGLE: EGL={} GLESv2={}", egl, gles);
+}
+
 static bool gl_inited = false;
 static int gl_init(GfxGlobalSettings& settings) {
   prof().instant_event("ROOT");
   Timer gl_init_timer;
+
+  // Select the graphics backend before anything reads it. Must happen before the
+  // GL attributes are set (they differ per backend) and before any shader is
+  // compiled, since the dialect prologue is chosen from this.
+  gfx_backend_init();
+
   // Initialize SDL
   {
     auto p = scoped_prof("startup::sdl::init_sdl");
@@ -127,18 +168,38 @@ static int gl_init(GfxGlobalSettings& settings) {
     auto p = scoped_prof("startup::sdl::set_gl_attributes");
 
     SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
-    SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
     if (settings.debug) {
       SDL_GL_SetAttribute(SDL_GL_CONTEXT_FLAGS, SDL_GL_CONTEXT_DEBUG_FLAG);
     } else {
       SDL_GL_SetAttribute(SDL_GL_CONTEXT_FLAGS, 0);
     }
-    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 4);
+
+    if (gfx_backend_is_angle()) {
+      // ANGLE: an OpenGL ES 3.0 context, reached through SDL's own EGL path.
+      //
+      // We do not create the EGL display/surface ourselves. SDL's Cocoa GLES
+      // backend (src/video/cocoa/SDL_cocoaopengles.m) already does all of it,
+      // and it selects that path off the profile mask alone: with
+      // SDL_GL_CONTEXT_PROFILE_ES it uses EGL, and with anything else it
+      // switches itself back to the CGL entry points. So this attribute IS the
+      // backend switch -- the AppleGL path below is reached unchanged.
+      //
+      // The window surface comes from the NSView's CALayer (SDL_cocoaopengles.m
+      // :139), which ANGLE-Metal accepts directly (SurfaceMtl.mm:451-473).
+      SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_ES);
+      SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
+      SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 0);
+      set_angle_library_hints();
+    } else {
+      SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
+      SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 4);
 #ifndef __APPLE__
-    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 3);
+      SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 3);
 #else
-    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 1);
+      SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 1);
 #endif
+    }
+
     SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, 24);
     SDL_GL_SetAttribute(SDL_GL_STENCIL_SIZE, 8);
     SDL_GL_SetAttribute(SDL_GL_ALPHA_SIZE, 8);
@@ -360,8 +421,8 @@ void GLDisplay::init_splash() {
   // The on-disk shaders carry no `#version`; it is injected here, exactly as
   // ShaderLibrary does for the shaders it owns. Use the shared builder rather
   // than a local copy so the two sites cannot drift apart.
-  vert_src = shader_prologue(kShaderBackend, false) + vert_src;
-  frag_src = shader_prologue(kShaderBackend, true) + frag_src;
+  vert_src = shader_prologue(gfx_shader_backend(), false) + vert_src;
+  frag_src = shader_prologue(gfx_shader_backend(), true) + frag_src;
 
   constexpr int len = 1024;
   GLint compile_ok;

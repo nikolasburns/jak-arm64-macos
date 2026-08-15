@@ -23,7 +23,7 @@ class ScopedProfilerNode;
  * every indexed draw rather than fail loudly.
  */
 inline void enable_primitive_restart_u32() {
-  if constexpr (kShaderBackend == ShaderBackend::Angle) {
+  if (gfx_backend_is_angle()) {
     glEnable(GL_PRIMITIVE_RESTART_FIXED_INDEX);
   } else {
     glEnable(GL_PRIMITIVE_RESTART);
