@@ -1,5 +1,7 @@
 #include "Hfrag.h"
 
+#include "game/graphics/opengl_renderer/opengl_utils.h"
+
 #include "common/log/log.h"
 
 #include "third-party/imgui/imgui.h"
@@ -398,8 +400,7 @@ void Hfrag::render_hfrag_level(Hfrag::HfragLevel* lev,
   glBindBuffer(GL_ARRAY_BUFFER, lev->vertex_buffer);
   glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, lev->index_buffer);
   glActiveTexture(GL_TEXTURE0);
-  glEnable(GL_PRIMITIVE_RESTART);
-  glPrimitiveRestartIndex(UINT32_MAX);
+  enable_primitive_restart_u32();
 
   // set up shader
   first_tfrag_draw_setup(pc_data.camera, render_state, ShaderId::HFRAG);
@@ -438,8 +439,7 @@ void Hfrag::render_hfrag_montage_textures(Hfrag::HfragLevel* lev,
   glBindVertexArray(lev->montage_vao);
   glBindBuffer(GL_ARRAY_BUFFER, lev->montage_vertices);
   glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, m_montage_indices);
-  glEnable(GL_PRIMITIVE_RESTART);
-  glPrimitiveRestartIndex(UINT32_MAX);
+  enable_primitive_restart_u32();
   glDisable(GL_DEPTH_TEST);
   glDisable(GL_BLEND);
 

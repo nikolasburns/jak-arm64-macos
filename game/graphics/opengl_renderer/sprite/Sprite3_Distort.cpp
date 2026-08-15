@@ -1,5 +1,6 @@
 #include "Sprite3.h"
 #include "game/graphics/opengl_renderer/dma_helpers.h"
+#include "game/graphics/opengl_renderer/opengl_utils.h"
 
 namespace {
 /*!
@@ -501,8 +502,7 @@ void Sprite3::distort_draw(SharedRenderState* render_state, ScopedProfilerNode& 
   glBindVertexArray(m_distort_ogl.vao);
 
   // Enable prim restart, we need this to break up the triangle strips
-  glEnable(GL_PRIMITIVE_RESTART);
-  glPrimitiveRestartIndex(UINT32_MAX);
+  enable_primitive_restart_u32();
 
   // Upload vertex data
   glBindBuffer(GL_ARRAY_BUFFER, m_distort_ogl.vertex_buffer);

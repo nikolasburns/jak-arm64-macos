@@ -1,5 +1,7 @@
 #include "Tie3.h"
 
+#include "game/graphics/opengl_renderer/opengl_utils.h"
+
 #include "common/global_profiler/GlobalProfiler.h"
 #include "common/log/log.h"
 #include "common/util/Assert.h"
@@ -560,8 +562,7 @@ void Tie3::draw_matching_draws_for_tree(int idx,
   glBindTexture(GL_TEXTURE_2D, tree.time_of_day_texture);
 
   glActiveTexture(GL_TEXTURE0);
-  glEnable(GL_PRIMITIVE_RESTART);
-  glPrimitiveRestartIndex(UINT32_MAX);
+  enable_primitive_restart_u32();
 
   int last_texture = -1;
   for (size_t draw_idx = tree.category_draw_indices[(int)category];
@@ -942,8 +943,7 @@ void Tie3::render_tree_wind(int idx,
   glBindTexture(GL_TEXTURE_2D, tree.time_of_day_texture);
 
   glActiveTexture(GL_TEXTURE0);
-  glEnable(GL_PRIMITIVE_RESTART);
-  glPrimitiveRestartIndex(UINT32_MAX);
+  enable_primitive_restart_u32();
 
   int last_texture = -1;
   glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, tree.wind_vertex_index_buffer);

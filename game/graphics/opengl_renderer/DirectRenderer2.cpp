@@ -1,5 +1,7 @@
 #include "DirectRenderer2.h"
 
+#include "game/graphics/opengl_renderer/opengl_utils.h"
+
 #include "common/log/log.h"
 
 #include "third-party/imgui/imgui.h"
@@ -138,8 +140,7 @@ void DirectRenderer2::flush_pending(SharedRenderState* render_state, ScopedProfi
       (m_vertices.next_vertex * sizeof(Vertex)) + (m_vertices.next_index * sizeof(u32));
 
   // initial OpenGL setup
-  glEnable(GL_PRIMITIVE_RESTART);
-  glPrimitiveRestartIndex(UINT32_MAX);
+  enable_primitive_restart_u32();
   render_state->shaders[ShaderId::DIRECT2].activate();
 
   // draw call loop
@@ -176,8 +177,7 @@ void DirectRenderer2::draw_call_loop_simple(SharedRenderState* render_state,
 
 void DirectRenderer2::draw_call_loop_grouped(SharedRenderState* render_state,
                                              ScopedProfilerNode& prof) {
-  glEnable(GL_PRIMITIVE_RESTART);
-  glPrimitiveRestartIndex(UINT32_MAX);
+  enable_primitive_restart_u32();
   u32 draw_idx = 0;
   while (draw_idx < m_next_free_draw) {
     const auto& draw = m_draw_buffer[draw_idx];

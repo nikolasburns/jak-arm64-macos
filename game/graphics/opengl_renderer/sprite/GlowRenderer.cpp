@@ -1,5 +1,7 @@
 #include "GlowRenderer.h"
 
+#include "game/graphics/opengl_renderer/opengl_utils.h"
+
 #include "third-party/imgui/imgui.h"
 
 /*
@@ -572,8 +574,7 @@ void GlowRenderer::downsample_chain(SharedRenderState* render_state,
                                     ScopedProfilerNode& prof,
                                     u32 num_sprites) {
   glBindVertexArray(m_ogl_downsampler.vao);
-  glEnable(GL_PRIMITIVE_RESTART);
-  glPrimitiveRestartIndex(UINT32_MAX);
+  enable_primitive_restart_u32();
   GLint old_viewport[4];
   glGetIntegerv(GL_VIEWPORT, old_viewport);
   render_state->shaders[ShaderId::GLOW_PROBE_DOWNSAMPLE].activate();
@@ -601,8 +602,7 @@ void GlowRenderer::downsample_chain(SharedRenderState* render_state,
 void GlowRenderer::setup_buffers_for_draws() {
   glBindFramebuffer(GL_FRAMEBUFFER, m_ogl.probe_fbo);
   glBindVertexArray(m_ogl.vao);
-  glEnable(GL_PRIMITIVE_RESTART);
-  glPrimitiveRestartIndex(UINT32_MAX);
+  enable_primitive_restart_u32();
   // don't want to write to the depth buffer we just copied, just test against it.
   glDepthMask(GL_FALSE);
   glBindBuffer(GL_ARRAY_BUFFER, m_ogl.vertex_buffer);
@@ -808,8 +808,7 @@ void GlowRenderer::flush(SharedRenderState* render_state, ScopedProfilerNode& pr
 void GlowRenderer::draw_sprites(SharedRenderState* render_state, ScopedProfilerNode& prof) {
   glBindFramebuffer(GL_FRAMEBUFFER, render_state->render_fb);
   glBindVertexArray(m_ogl.vao);
-  glEnable(GL_PRIMITIVE_RESTART);
-  glPrimitiveRestartIndex(UINT32_MAX);
+  enable_primitive_restart_u32();
 
   glActiveTexture(GL_TEXTURE1);
   glBindTexture(GL_TEXTURE_2D, m_ogl.downsample_fbos[kDownsampleIterations - 1].tex);

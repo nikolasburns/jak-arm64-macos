@@ -1,6 +1,7 @@
 #include "TFragment.h"
 
 #include "game/graphics/opengl_renderer/dma_helpers.h"
+#include "game/graphics/opengl_renderer/opengl_utils.h"
 
 #include "third-party/imgui/imgui.h"
 
@@ -434,8 +435,7 @@ void TFragment::render_tree(int geom,
   glBindBuffer(GL_ELEMENT_ARRAY_BUFFER,
                render_state->no_multidraw ? tree.single_draw_index_buffer : tree.index_buffer);
   glActiveTexture(GL_TEXTURE0);
-  glEnable(GL_PRIMITIVE_RESTART);
-  glPrimitiveRestartIndex(UINT32_MAX);
+  enable_primitive_restart_u32();
 
   cull_check_all_slow(settings.camera.planes, tree.vis->vis_nodes, settings.occlusion_culling,
                       m_cache.vis_temp.data());

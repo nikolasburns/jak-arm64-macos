@@ -1,5 +1,7 @@
 #include "Shrub.h"
 
+#include "game/graphics/opengl_renderer/opengl_utils.h"
+
 #include "common/log/log.h"
 
 Shrub::Shrub(const std::string& name, int my_id) : BucketRenderer(name, my_id) {
@@ -301,8 +303,7 @@ void Shrub::render_tree(int idx,
   glBindBuffer(GL_ELEMENT_ARRAY_BUFFER,
                render_state->no_multidraw ? tree.single_draw_index_buffer : tree.index_buffer);
   glActiveTexture(GL_TEXTURE0);
-  glEnable(GL_PRIMITIVE_RESTART);
-  glPrimitiveRestartIndex(UINT32_MAX);
+  enable_primitive_restart_u32();
   if (m_proto_vis_data) {
     update_vis_mask(tree.proto_vis_mask, m_proto_vis_data, m_proto_vis_data_size,
                     tree.proto_name_to_idx);

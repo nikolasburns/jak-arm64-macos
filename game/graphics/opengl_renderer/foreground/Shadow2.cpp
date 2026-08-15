@@ -1,5 +1,7 @@
 #include "Shadow2.h"
 
+#include "game/graphics/opengl_renderer/opengl_utils.h"
+
 #include "third-party/imgui/imgui.h"
 
 Shadow2::Shadow2(const std::string& name, int my_id) : BucketRenderer(name, my_id) {
@@ -458,8 +460,7 @@ void Shadow2::draw_buffers(SharedRenderState* render_state,
   m_front_index_buffer[m_front_index_buffer_used++] = UINT32_MAX;
 
   glBindVertexArray(m_ogl.vao);
-  glEnable(GL_PRIMITIVE_RESTART);
-  glPrimitiveRestartIndex(UINT32_MAX);
+  enable_primitive_restart_u32();
   glBindBuffer(GL_ARRAY_BUFFER, m_ogl.vertex_buffer);
   glBufferData(GL_ARRAY_BUFFER, m_vertex_buffer_used * sizeof(ShadowVertex), m_vertex_buffer.data(),
                GL_STREAM_DRAW);
@@ -488,8 +489,7 @@ void Shadow2::draw_buffers(SharedRenderState* render_state,
                  m_front_index_buffer.data(), GL_STREAM_DRAW);
     glStencilFunc(GL_ALWAYS, 0, 0);          // always pass stencil
     glStencilOp(GL_KEEP, GL_KEEP, GL_INCR);  // increment on depth pass.
-    glEnable(GL_PRIMITIVE_RESTART);
-    glPrimitiveRestartIndex(UINT32_MAX);
+    enable_primitive_restart_u32();
     glDrawElements(GL_TRIANGLE_STRIP, (m_front_index_buffer_used - 6), GL_UNSIGNED_INT, nullptr);
 
     if (m_debug_draw_volume) {

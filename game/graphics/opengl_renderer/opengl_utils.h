@@ -2,10 +2,34 @@
 
 #include "common/math/Vector.h"
 
+#include "game/graphics/opengl_renderer/Shader.h"
 #include "game/graphics/pipelines/opengl.h"
 
 struct SharedRenderState;
 class ScopedProfilerNode;
+
+/*!
+ * Enable primitive restart with UINT32_MAX as the restart index.
+ *
+ * Every draw in this renderer indexes with GL_UNSIGNED_INT and restarts on
+ * UINT32_MAX, which is exactly GLES 3.0's *fixed* restart index -- so on GLES the
+ * whole thing is GL_PRIMITIVE_RESTART_FIXED_INDEX and there is no index to set.
+ *
+ * Desktop GL is NOT the same, and this is why the calls cannot simply be deleted:
+ * GL_PRIMITIVE_RESTART_FIXED_INDEX is core only in GL 4.3+, and the macOS system
+ * GL context is 4.1 (see opengl.cpp -- 4.3 is requested off-Apple, 4.1 on it).
+ * There, restart is GL_PRIMITIVE_RESTART with a user-supplied index that defaults
+ * to 0, so dropping glPrimitiveRestartIndex would restart on index 0 and corrupt
+ * every indexed draw rather than fail loudly.
+ */
+inline void enable_primitive_restart_u32() {
+  if constexpr (kShaderBackend == ShaderBackend::Angle) {
+    glEnable(GL_PRIMITIVE_RESTART_FIXED_INDEX);
+  } else {
+    glEnable(GL_PRIMITIVE_RESTART);
+    glPrimitiveRestartIndex(UINT32_MAX);
+  }
+}
 
 /*!
  * This is a wrapper around a framebuffer and texture to make it easier to render to a texture.
