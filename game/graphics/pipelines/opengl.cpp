@@ -749,6 +749,7 @@ void render_game_frame(int game_width,
     }
     // note : it's important we call get_screenshot_flag first because it modifies state
     if (g_gfx_data->debug_gui.get_screenshot_flag() || g_want_screenshot) {
+      const bool from_host_trigger = g_want_screenshot;
       g_want_screenshot = false;
       options.save_screenshot = true;
       options.internal_res_screenshot = true;
@@ -759,8 +760,15 @@ void render_game_frame(int game_width,
       options.draw_region_width = options.game_res_w;
       options.draw_region_height = options.game_res_h;
       options.msaa_samples = g_screen_shot_settings->msaa;
-      options.screenshot_path =
-          file_util::make_screenshot_filepath(g_game_version, get_screen_shot_name());
+      // A host trigger (GK_SCREENSHOT_AT_FRAME) may name an exact output path, so an
+      // automated capture lands somewhere predictable instead of a timestamped file.
+      const char* host_path = from_host_trigger ? get_host_trigger_screenshot_path() : "";
+      if (host_path && host_path[0]) {
+        options.screenshot_path = host_path;
+      } else {
+        options.screenshot_path =
+            file_util::make_screenshot_filepath(g_game_version, get_screen_shot_name());
+      }
     }
 
     options.draw_small_profiler_window =
@@ -911,6 +919,10 @@ void GLDisplay::render() {
         SplashTimer.getSeconds() < SPLASH_SCREEN_TIME) {
       draw_splash(fbuf_w, fbuf_h);
     }
+
+    // Host-side screenshot trigger, for automated reference captures. Checked here so
+    // it counts exactly the frames that actually render.
+    screenshot_check_host_trigger();
 
     render_game_frame(
         game_res_w, game_res_h, fbuf_w, fbuf_h, Gfx::g_global_settings.lbox_w,
