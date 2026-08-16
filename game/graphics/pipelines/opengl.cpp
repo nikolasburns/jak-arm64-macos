@@ -773,40 +773,25 @@ void render_game_frame(int game_width,
       options.msaa_samples = msaa_max;
     }
 
-    // MSAA is clamped to 1 on ANGLE. THE ORIGINAL REASON NO LONGER APPLIES and the
-    // current reason is different, so do not re-derive it from the commit message.
+    // MSAA ran clamped to 1 on ANGLE for three sessions. The clamp is GONE, and both
+    // reasons it existed are closed -- recorded here so it is not reinstated on the
+    // strength of an old commit message.
     //
     // It was installed because the resolve blit in do_pcrtc_effects crashed inside
     // ANGLE's Metal backend. That crash was never MSAA's: it was the vertex-attribute
-    // type mismatch fixed in 66d3b8b6ce, and with that fix in place jak1 runs to
-    // village1 at msaa 4 on ANGLE, 3/3 runs, under MTL_DEBUG_LAYER=1 with the resolve
-    // buffer live and zero Metal assertions.
+    // type mismatch fixed in 66d3b8b6ce. With that fix in, jak1 reaches village1 at
+    // msaa 4 on ANGLE under MTL_DEBUG_LAYER=1 with the resolve buffer live and zero
+    // Metal assertions.
     //
-    // What keeps the clamp is a DIFFERENT and backend-independent defect that a
-    // glGetError probe found once the dead debug callback was replaced: at msaa 4 the
-    // sprite-distort blit (Sprite3_Distort.cpp) reads the multisampled render FBO into
-    // a GL_RGB8 destination, and a resolve between mismatched colour formats is
-    // GL_INVALID_OPERATION. Measured on BOTH backends -- AppleGL 651 hits/boot, ANGLE
-    // 291 -- and clean at msaa 1 on both. It does not crash; the blit is simply
-    // dropped. AppleGL ships at msaa 4, so that one is live today.
+    // It was then KEPT for a second, backend-independent defect: the sprite-distort
+    // blit read the multisampled render FBO into a GL_RGB8 destination, and a resolve
+    // between mismatched colour formats is GL_INVALID_OPERATION. That is fixed
+    // (Sprite3_Distort.cpp now allocates GL_RGBA8) and measured clean at msaa 4 on
+    // both backends -- AppleGL 1300 errored blits/boot -> 0, ANGLE 291 -> 0.
     //
-    // So this clamp now only hides a defect ANGLE shares with the shipping backend.
-    // Lift it as part of giving the distort FBO an RGBA8 format, not before -- that
-    // fix is owed to AppleGL too. See the MSAA / DISTORT BLIT item in the work log.
-    //
-    // Clamped here rather than at the settings source because this is the one point
-    // every path funnels through, including the internal-res screenshot override
-    // above, which sets msaa_samples independently of the global setting.
-    //
-    // GK_ANGLE_ALLOW_MSAA=1 lifts the clamp so the resolve can be re-measured without a
-    // rebuild. Diagnostic only; the default remains clamped.
-    static const bool angle_allow_msaa = []() {
-      const char* v = getenv("GK_ANGLE_ALLOW_MSAA");
-      return v && v[0] == '1';
-    }();
-    if (gfx_backend_is_angle() && !angle_allow_msaa) {
-      options.msaa_samples = 1;
-    }
+    // Note the defect was never ANGLE-specific: AppleGL ships at msaa 4 and was
+    // dropping that blit every frame in the shipping configuration. The clamp had
+    // been hiding it on ANGLE, which is why it surfaced last.
 
     if constexpr (run_dma_copy) {
       auto& chain = g_gfx_data->dma_copier.get_last_result();
