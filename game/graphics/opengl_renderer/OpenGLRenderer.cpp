@@ -10,6 +10,7 @@
 #include "game/graphics/opengl_renderer/EyeRenderer.h"
 #include "game/graphics/opengl_renderer/ProgressRenderer.h"
 #include "game/graphics/opengl_renderer/ShadowRenderer.h"
+#include "game/graphics/opengl_renderer/opengl_utils.h"
 #include "game/graphics/opengl_renderer/SkyRenderer.h"
 #include "game/graphics/opengl_renderer/TextureUploadHandler.h"
 #include "game/graphics/opengl_renderer/VisDataHandler.h"
@@ -75,16 +76,35 @@ OpenGLRenderer::OpenGLRenderer(std::shared_ptr<TexturePool> texture_pool,
     : m_render_state(texture_pool, loader, version),
       m_collide_renderer(version),
       m_version(version) {
-  // requires OpenGL 4.3
-#ifndef __APPLE__
-  // setup OpenGL errors
-  glEnable(GL_DEBUG_OUTPUT);
-  glDebugMessageCallback(opengl_error_callback, nullptr);
-  // disable specific errors
-  const GLuint gl_error_ignores_api_other[1] = {0x20071};  // some annoying nvidia message
-  glDebugMessageControl(GL_DEBUG_SOURCE_API, GL_DEBUG_TYPE_OTHER, GL_DONT_CARE, 1,
-                        &gl_error_ignores_api_other[0], GL_FALSE);
+  // Debug output needs desktop GL 4.3, which macOS does not have -- hence the __APPLE__
+  // guard. It is ALSO GL_KHR_debug, which the ANGLE-Metal context advertises, so the
+  // callback is installed there too.
+  //
+  // IT DOES NOT ACTUALLY DELIVER ON ANGLE, and that is measured, not assumed: SDL's EGL
+  // path does not create a debug context (GL_CONTEXT_FLAGS reads 0 despite
+  // SDL_GL_CONTEXT_DEBUG_FLAG being requested), and ANGLE drops every message on a
+  // non-debug context -- an invalid call raises glGetError but the callback never fires.
+  // It is registered anyway so it starts working the moment the context flag is fixed.
+  //
+  // The consequence matters more than the code: on ANGLE a log with no GL errors in it
+  // is not evidence of a clean frame. Reach for glGetError or MTL_DEBUG_LAYER=1.
+#if !defined(__APPLE__)
+  const bool enable_gl_debug_output = true;
+#else
+  const bool enable_gl_debug_output = gfx_backend_is_angle();
 #endif
+  // Both pointers are checked: on the ANGLE path they are bound by hand after the glad
+  // load (glad files them under GL 4.3, which a "3.0" GLES version string skips), and a
+  // null here would fault at pc=0 rather than degrade.
+  if (enable_gl_debug_output && glad_glDebugMessageCallback && glad_glDebugMessageControl) {
+    // setup OpenGL errors
+    glEnable(GL_DEBUG_OUTPUT);
+    glDebugMessageCallback(opengl_error_callback, nullptr);
+    // disable specific errors
+    const GLuint gl_error_ignores_api_other[1] = {0x20071};  // some annoying nvidia message
+    glDebugMessageControl(GL_DEBUG_SOURCE_API, GL_DEBUG_TYPE_OTHER, GL_DONT_CARE, 1,
+                          &gl_error_ignores_api_other[0], GL_FALSE);
+  }
 
   lg::info("OpenGL context version: {}", (const char*)glGetString(GL_VERSION));
   lg::info("OpenGL context renderer: {}", (const char*)glGetString(GL_RENDERER));
@@ -894,15 +914,27 @@ Fbo make_fbo(int w, int h, int msaa, bool make_zbuf_and_stencil) {
   glBindFramebuffer(GL_FRAMEBUFFER, result.fbo_id);
   result.valid = true;
 
-  // make texture that will hold the colors of the framebuffer
-  GLuint tex;
-  glGenTextures(1, &tex);
-  result.tex_id = tex;
-  glActiveTexture(GL_TEXTURE0);
+  // make the buffer that will hold the colors of the framebuffer.
+  //
+  // A multisampled color buffer is never sampled: every reader (the display blit in
+  // do_pcrtc_effects, the internal-res screenshot) resolves it into the
+  // single-sampled resolve_buffer with glBlitFramebuffer first. So it only has to be
+  // a render target and a blit source, which a RENDERBUFFER provides -- and
+  // glRenderbufferStorageMultisample is GLES 3.0 core, whereas the multisampled
+  // TEXTURE it replaces (glTexImage2DMultisample) is GLES 3.1 and unavailable on
+  // ANGLE's Metal backend. The single-sampled path stays a texture because that one
+  // IS sampled directly.
   if (use_multisample) {
-    glBindTexture(GL_TEXTURE_2D_MULTISAMPLE, tex);
-    glTexImage2DMultisample(GL_TEXTURE_2D_MULTISAMPLE, msaa, GL_RGBA8, w, h, GL_TRUE);
+    GLuint color_rbuf;
+    glGenRenderbuffers(1, &color_rbuf);
+    result.color_rbuf_id = color_rbuf;
+    glBindRenderbuffer(GL_RENDERBUFFER, color_rbuf);
+    glRenderbufferStorageMultisample(GL_RENDERBUFFER, msaa, GL_RGBA8, w, h);
   } else {
+    GLuint tex;
+    glGenTextures(1, &tex);
+    result.tex_id = tex;
+    glActiveTexture(GL_TEXTURE0);
     glBindTexture(GL_TEXTURE_2D, tex);
     glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, w, h, 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
   }
@@ -922,9 +954,10 @@ Fbo make_fbo(int w, int h, int msaa, bool make_zbuf_and_stencil) {
   // attach texture to framebuffer as target for colors
 
   if (use_multisample) {
-    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D_MULTISAMPLE, tex, 0);
+    glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_RENDERBUFFER,
+                              *result.color_rbuf_id);
   } else {
-    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, tex, 0);
+    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, *result.tex_id, 0);
   }
 
   GLenum render_targets[1] = {GL_COLOR_ATTACHMENT0};
@@ -1138,7 +1171,19 @@ void OpenGLRenderer::render(DmaFollower dma, const RenderOptions& settings) {
 void OpenGLRenderer::draw_renderer_selection_window() {
   ImGui::Begin("Renderer Debug");
 
-  ImGui::Checkbox("Use old single-draw", &m_render_state.no_multidraw);
+  if (gfx_backend_is_angle()) {
+    // Not a preference on this backend: the batched path calls a desktop-GL
+    // entry point that GLES 3.0 does not have, and that resolves to AppleGL if
+    // called anyway. Shown disabled rather than hidden so the state is visible.
+    ImGui::BeginDisabled();
+    bool forced = true;
+    ImGui::Checkbox("Use old single-draw", &forced);
+    ImGui::EndDisabled();
+    ImGui::SameLine();
+    ImGui::TextDisabled("(required: no multidraw in GLES 3.0)");
+  } else {
+    ImGui::Checkbox("Use old single-draw", &m_render_state.no_multidraw);
+  }
   ImGui::SliderFloat("Fog Adjust", &m_render_state.fog_intensity, 0, 10);
   ImGui::Checkbox("Sky CPU", &m_render_state.use_sky_cpu);
   ImGui::Checkbox("Occlusion Cull", &m_render_state.use_occlusion_culling);
@@ -1245,14 +1290,14 @@ void OpenGLRenderer::setup_frame(const RenderOptions& settings) {
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
     glViewport(0, 0, m_fbo_state.resources.window.width, m_fbo_state.resources.window.height);
     glClearColor(0.0, 0.0, 0.0, 0.0);
-    glClearDepth(0.0);
+    glClearDepthf(0.0f);
     glDepthMask(GL_TRUE);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
     glDisable(GL_BLEND);
 
     glBindFramebuffer(GL_FRAMEBUFFER, m_fbo_state.render_fbo->fbo_id);
     glClearColor(0.0, 0.0, 0.0, 0.0);
-    glClearDepth(0.0);
+    glClearDepthf(0.0f);
     glClearStencil(0);
     glDepthMask(GL_TRUE);
     // Note: could rely on sky renderer to clear depth and color, but this causes problems with
@@ -1623,6 +1668,19 @@ void OpenGLRenderer::do_pcrtc_effects(float alp,
   if (m_fbo_state.resources.resolve_buffer.valid) {
     glBindFramebuffer(GL_READ_FRAMEBUFFER, m_fbo_state.render_fbo->fbo_id);
     glBindFramebuffer(GL_DRAW_FRAMEBUFFER, m_fbo_state.resources.resolve_buffer.fbo_id);
+    // This is an MSAA *resolve*: read is multisampled, draw is not. GLES 3.0 is far
+    // stricter than desktop GL about that case -- the rectangles must be identical
+    // (no scaling), the formats must match, and the filter MUST be GL_NEAREST.
+    // GL_LINEAR here is not a quality choice that GLES happens to reject; it is an
+    // explicit GL_INVALID_OPERATION, and ANGLE carries the diagnostic for it
+    // ("Invalid blit filter."). Desktop GL never complained, which is why it stood.
+    //
+    // The other two conditions already hold by construction and must keep holding:
+    // resolve_buffer is built from the same game_res_w/h as render_buffer in
+    // setup_frame(), and make_fbo() gives both GL_RGBA8. GL_NEAREST is also lossless
+    // here precisely because the rects are 1:1 -- there is no filtering to do, only
+    // the multisample resolve itself.
+    drain_gl_errors();
     glBlitFramebuffer(0,                                            // srcX0
                       0,                                            // srcY0
                       m_fbo_state.render_fbo->width,                // srcX1
@@ -1632,8 +1690,9 @@ void OpenGLRenderer::do_pcrtc_effects(float alp,
                       m_fbo_state.resources.resolve_buffer.width,   // dstX1
                       m_fbo_state.resources.resolve_buffer.height,  // dstY1
                       GL_COLOR_BUFFER_BIT,                          // mask
-                      GL_LINEAR                                     // filter
+                      GL_NEAREST                                    // filter
     );
+    blit_probe_report("OpenGLRenderer:pcrtc_resolve");
     window_blit_src = &m_fbo_state.resources.resolve_buffer;
   } else {
     window_blit_src = &m_fbo_state.resources.render_buffer;

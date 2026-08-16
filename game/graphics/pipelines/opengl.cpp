@@ -22,6 +22,7 @@
 #include "game/graphics/display.h"
 #include "game/graphics/gfx.h"
 #include "game/graphics/opengl_renderer/OpenGLRenderer.h"
+#include "game/graphics/opengl_renderer/Shader.h"
 #include "game/graphics/opengl_renderer/debug_gui.h"
 #include "game/graphics/screenshot.h"
 #include "game/graphics/texture/TexturePool.h"
@@ -96,10 +97,73 @@ struct GraphicsData {
 
 std::unique_ptr<GraphicsData> g_gfx_data;
 
+// Point SDL at the ANGLE libEGL/libGLESv2 to dlopen for the GLES path.
+//
+// NOTHING IS LINKED AGAINST ANGLE. SDL loads both libraries by name at runtime
+// (third-party/SDL/src/video/SDL_egl.c: DEFAULT_EGL / DEFAULT_OGL_ES2, each
+// overridable by hint), so an AppleGL-only build neither references nor requires
+// any ANGLE artifact -- absent them, only the ANGLE path fails, and it fails at
+// context creation with SDL's own error rather than at load time.
+//
+// ANGLE build pinned to commit aa192212af54a9de42a63db84a292b4cbfcaf114
+// ("IR: Validate matrix packing decorations", 2026-08-14). The build recipe --
+// args.gn plus the two environment blockers (DEVELOPER_DIR, MetalToolchain) --
+// is recorded in PROGRESS.md, session 28. libEGL.dylib has install name
+// "./libEGL.dylib", so an ABSOLUTE path is required here; a bare name would only
+// resolve relative to the working directory.
+static void set_angle_library_hints() {
+  // GK_ANGLE_DIR overrides the directory holding libEGL.dylib + libGLESv2.dylib.
+  const char* dir = std::getenv("GK_ANGLE_DIR");
+  if (!dir) {
+    lg::warn(
+        "gfx backend ANGLE: GK_ANGLE_DIR is not set; falling back to SDL's default library "
+        "search. Set it to the directory containing libEGL.dylib and libGLESv2.dylib.");
+    return;
+  }
+  const std::string egl = std::string(dir) + "/libEGL.dylib";
+  const std::string gles = std::string(dir) + "/libGLESv2.dylib";
+  if (!fs::exists(egl) || !fs::exists(gles)) {
+    lg::error("gfx backend ANGLE: GK_ANGLE_DIR=\"{}\" lacks libEGL.dylib and/or libGLESv2.dylib",
+              dir);
+    return;
+  }
+  SDL_SetHint(SDL_HINT_EGL_LIBRARY, egl.c_str());
+  SDL_SetHint(SDL_HINT_OPENGL_LIBRARY, gles.c_str());
+  lg::info("gfx backend ANGLE: EGL={} GLESv2={}", egl, gles);
+
+  // Select ANGLE's Metal backend.
+  //
+  // THIS IS LOAD-BEARING, and its absence FAILS QUIETLY. SDL creates the EGL
+  // display without an EGL_PLATFORM_ANGLE_TYPE_ANGLE attribute, so ANGLE picks
+  // its own default -- which on this build is the *GL* backend, i.e. GLES
+  // emulated on the very Apple GL driver ANGLE exists to replace. That still
+  // produces a working GLES 3.0 context and a plausible log line
+  // ("ANGLE (Apple, Apple M4 Pro, OpenGL 4.1 Metal - 90.5)"), so it reads as
+  // success while not being the backend we asked for. With this set the
+  // renderer string instead reads "ANGLE Metal Renderer: Apple M4 Pro".
+  //
+  // Respect an explicit override so the GL backend stays reachable for A/B
+  // attribution (ANGLE_DEFAULT_PLATFORM=gl), which is worth having when
+  // deciding whether a defect belongs to ANGLE's frontend or to Metal.
+  if (!std::getenv("ANGLE_DEFAULT_PLATFORM")) {
+    setenv("ANGLE_DEFAULT_PLATFORM", "metal", 0);
+    lg::info("gfx backend ANGLE: ANGLE_DEFAULT_PLATFORM=metal");
+  } else {
+    lg::info("gfx backend ANGLE: ANGLE_DEFAULT_PLATFORM={} (from environment)",
+             std::getenv("ANGLE_DEFAULT_PLATFORM"));
+  }
+}
+
 static bool gl_inited = false;
 static int gl_init(GfxGlobalSettings& settings) {
   prof().instant_event("ROOT");
   Timer gl_init_timer;
+
+  // Select the graphics backend before anything reads it. Must happen before the
+  // GL attributes are set (they differ per backend) and before any shader is
+  // compiled, since the dialect prologue is chosen from this.
+  gfx_backend_init();
+
   // Initialize SDL
   {
     auto p = scoped_prof("startup::sdl::init_sdl");
@@ -126,18 +190,38 @@ static int gl_init(GfxGlobalSettings& settings) {
     auto p = scoped_prof("startup::sdl::set_gl_attributes");
 
     SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
-    SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
     if (settings.debug) {
       SDL_GL_SetAttribute(SDL_GL_CONTEXT_FLAGS, SDL_GL_CONTEXT_DEBUG_FLAG);
     } else {
       SDL_GL_SetAttribute(SDL_GL_CONTEXT_FLAGS, 0);
     }
-    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 4);
+
+    if (gfx_backend_is_angle()) {
+      // ANGLE: an OpenGL ES 3.0 context, reached through SDL's own EGL path.
+      //
+      // We do not create the EGL display/surface ourselves. SDL's Cocoa GLES
+      // backend (src/video/cocoa/SDL_cocoaopengles.m) already does all of it,
+      // and it selects that path off the profile mask alone: with
+      // SDL_GL_CONTEXT_PROFILE_ES it uses EGL, and with anything else it
+      // switches itself back to the CGL entry points. So this attribute IS the
+      // backend switch -- the AppleGL path below is reached unchanged.
+      //
+      // The window surface comes from the NSView's CALayer (SDL_cocoaopengles.m
+      // :139), which ANGLE-Metal accepts directly (SurfaceMtl.mm:451-473).
+      SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_ES);
+      SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
+      SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 0);
+      set_angle_library_hints();
+    } else {
+      SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
+      SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 4);
 #ifndef __APPLE__
-    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 3);
+      SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 3);
 #else
-    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 1);
+      SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 1);
 #endif
+    }
+
     SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, 24);
     SDL_GL_SetAttribute(SDL_GL_STENCIL_SIZE, 8);
     SDL_GL_SetAttribute(SDL_GL_ALPHA_SIZE, 8);
@@ -149,6 +233,27 @@ static int gl_init(GfxGlobalSettings& settings) {
 static void gl_exit() {
   g_gfx_data.reset();
   gl_inited = false;
+}
+
+// imgui ships its OWN GL loader (imgui_impl_opengl3_loader.h, a stripped gl3w),
+// entirely separate from glad. On __APPLE__ its open_libgl() is unconditional:
+// it dlopen()s /System/Library/Frameworks/OpenGL.framework and dlsym()s every
+// entry point straight out of AppleGL, with no EGL/GLES awareness at all. On the
+// ANGLE path that binds imgui to the wrong GL implementation -- AppleGL's
+// glGetIntegerv then runs with an EGL context current and no CGL context to
+// dereference, and faults on a null context pointer inside libGL.dylib before it
+// can return.
+//
+// This is the same defect class as gladLoadGL() (session 3.5): a second loader
+// resolving against the system framework while the real context belongs to
+// somebody else. It is declared here rather than by including the loader header,
+// which is an implementation header -- it #defines __gl_h_ and redeclares the GL
+// typedefs, so pulling it in beside glad would collide. imgl3wInit2 is the
+// loader's documented public entry point for exactly this override.
+extern "C" {
+typedef void (*GL3WglProc)(void);
+typedef GL3WglProc (*GL3WGetProcAddressProc)(const char* proc);
+int imgl3wInit2(GL3WGetProcAddressProc proc);
 }
 
 static void init_imgui(SDL_Window* window,
@@ -182,8 +287,29 @@ static void init_imgui(SDL_Window* window,
   // cursor error is set here that we clear.
   SDL_ClearError();
 
+  // Load imgui's GL entry points through SDL, which resolves them against
+  // whichever GL the current context actually belongs to.
+  //
+  // This runs on BOTH backends, and is safe on the desktop path by the same
+  // argument as the glad fix: there the context IS AppleGL's, so SDL hands back
+  // pointers into the very library imgui's own loader would have dlopen()ed.
+  // Keeping one path avoids a desktop branch that nothing would exercise.
+  //
+  // Order is load-bearing. ImGui_ImplOpenGL3_Init calls the backend's own
+  // ImGui_ImplOpenGL3_InitLoader, which is lazy -- it only runs imgl3wInit() if
+  // glGetIntegerv is still null. Populating the table first means the AppleGL
+  // dlopen never happens. Doing this AFTER init would be too late.
+  if (imgl3wInit2((GL3WGetProcAddressProc)SDL_GL_GetProcAddress) != 0) {
+    lg::error("imgui GL loader init failed");
+    dialogs::create_error_message_dialog("Critical Error Encountered",
+                                         "Unable to initialize the ImGui OpenGL loader.");
+    return;
+  }
+
   // set up the renderer
-  ImGui_ImplOpenGL3_Init(glsl_version.c_str());
+  if (!ImGui_ImplOpenGL3_Init(glsl_version.c_str())) {
+    lg::error("ImGui_ImplOpenGL3_Init failed (glsl version \"{}\")", glsl_version);
+  }
 }
 
 static std::shared_ptr<GfxDisplay> gl_make_display(int width,
@@ -236,8 +362,23 @@ static std::shared_ptr<GfxDisplay> gl_make_display(int width,
   if (!gl_inited) {
     {
       auto p = scoped_prof("startup::sdl::glad_init");
-      gladLoadGLLoader((GLADloadproc)SDL_GL_GetProcAddress);
-      if (!gladLoadGL()) {
+      // Load the entry points through SDL, which resolves them against whichever
+      // GL the context actually belongs to: AppleGL on the desktop path, ANGLE's
+      // libGLESv2 on the ANGLE path.
+      //
+      // The GLES version-number mapping that makes this loader cover GL 3.1-3.3
+      // lives in find_coreGL (third-party/glad/src/glad.c).
+      bool glad_ok = gladLoadGLLoader((GLADloadproc)SDL_GL_GetProcAddress) != 0;
+      if (!gfx_backend_is_angle()) {
+        // Desktop path unchanged. gladLoadGL() must NOT run on the ANGLE path:
+        // its no-argument form dlopen()s OpenGL.framework itself (glad.c:89) and
+        // re-binds every pointer by dlsym, discarding what the loader above
+        // installed. Its third statement is then glGetString(GL_VERSION) -- now
+        // AppleGL's, called with an EGL context current and no CGL context at
+        // all, which segfaults inside libGL.dylib before it can return.
+        glad_ok = gladLoadGL();
+      }
+      if (!glad_ok) {
         lg::error("GL init fail");
         dialogs::create_error_message_dialog("Critical Error Encountered",
                                              "Unable to initialize OpenGL API.\nOpenGOAL requires "
@@ -246,14 +387,80 @@ static std::shared_ptr<GfxDisplay> gl_make_display(int width,
         return NULL;
       }
     }
+    if (gfx_backend_is_angle()) {
+      // Bind the KHR_debug entry points by hand. They are core desktop GL 4.3, so glad
+      // files them under load_GL_VERSION_4_3, and that block never runs here: GLES
+      // reports itself as "3.0", so GLAD_GL_VERSION_4_3 is false and both pointers stay
+      // NULL. ANGLE does advertise GL_KHR_debug on the live context and exports the
+      // unsuffixed names, so resolving them individually is all that is needed -- the
+      // same shape as the glClearDepthf fix, and for the same reason.
+      //
+      // This is what gives the ANGLE path a GL error channel at all. Bind it before
+      // OpenGLRenderer's constructor, which is where the callback is installed.
+      if (!glad_glDebugMessageCallback) {
+        glad_glDebugMessageCallback = reinterpret_cast<PFNGLDEBUGMESSAGECALLBACKPROC>(
+            SDL_GL_GetProcAddress("glDebugMessageCallback"));
+      }
+      if (!glad_glDebugMessageControl) {
+        glad_glDebugMessageControl = reinterpret_cast<PFNGLDEBUGMESSAGECONTROLPROC>(
+            SDL_GL_GetProcAddress("glDebugMessageControl"));
+      }
+      // MEASURED, and the reason the warning below is unconditional: binding these is
+      // necessary but NOT sufficient. ANGLE only delivers debug messages on a context
+      // created with EGL_CONTEXT_OPENGL_DEBUG, and SDL's EGL path does not produce one
+      // here -- the live context reports GL_CONTEXT_FLAGS = 0x0 even though
+      // SDL_GL_CONTEXT_DEBUG_FLAG was requested. Proven end-to-end: an invalid glEnable
+      // sets glGetError = GL_INVALID_ENUM while the callback stays silent, and even
+      // glDebugMessageInsert is not delivered.
+      //
+      // So on this backend the callback is installed and inert. A quiet log is NOT
+      // evidence of a clean frame; use glGetError or MTL_DEBUG_LAYER=1 instead. See the
+      // GL DEBUG CHANNEL item in the work log.
+      if (glad_glDebugMessageCallback && glad_glDebugMessageControl) {
+        lg::warn(
+            "gfx backend ANGLE: KHR_debug entry points bound, but the context is not a debug "
+            "context (GL_CONTEXT_FLAGS=0) -- GL errors are NOT delivered to the callback and a "
+            "quiet log proves nothing");
+      } else {
+        lg::warn(
+            "gfx backend ANGLE: KHR_debug unavailable; GL errors will NOT be reported and a quiet "
+            "log proves nothing");
+      }
+
+      // Flat-qualified varyings take their value from the PROVOKING vertex, and
+      // the two APIs disagree on which that is: desktop GL defaults to the LAST
+      // vertex of the primitive, GLES 3.0 is fixed to the FIRST. The shaders are
+      // written for desktop GL, so on ANGLE the flat-shaded renderers would pick
+      // up a different vertex's colour without this.
+      //
+      // GL_ANGLE_provoking_vertex exists for exactly this; resolve it
+      // dynamically, since our glad loader is desktop-GL generated.
+      using ProvokingVertexANGLE = void(APIENTRY*)(GLenum);
+      auto provoking_vertex_angle =
+          reinterpret_cast<ProvokingVertexANGLE>(SDL_GL_GetProcAddress("glProvokingVertexANGLE"));
+      if (provoking_vertex_angle) {
+        constexpr GLenum kFirstVertexConventionANGLE = 0x8E4D;  // GL_FIRST_VERTEX_CONVENTION_ANGLE
+        provoking_vertex_angle(kFirstVertexConventionANGLE);
+        lg::info("gfx backend ANGLE: provoking vertex set to FIRST_VERTEX_CONVENTION");
+      } else {
+        // Not fatal, but flat-shaded colours will be wrong. Named visual checks
+        // for this: direct2, sprite_3d, sprite_distort, depth_cue.
+        lg::warn(
+            "gfx backend ANGLE: glProvokingVertexANGLE unavailable; flat-shaded colours may be "
+            "taken from the wrong vertex");
+      }
+    }
+
     {
       auto p = scoped_prof("startup::sdl::gfx_data_init");
       g_gfx_data = std::make_unique<GraphicsData>(game_version);
     }
     gl_inited = true;
     const char* gl_version = (const char*)glGetString(GL_VERSION);
-    lg::info("OpenGL initialized - v{}.{} | Renderer: {}", GLVersion.major, GLVersion.minor,
-             gl_version);
+    const char* gl_renderer = (const char*)glGetString(GL_RENDERER);
+    lg::info("OpenGL initialized - v{}.{} | Version: {} | Renderer: {}", GLVersion.major,
+             GLVersion.minor, gl_version ? gl_version : "(null)",
+             gl_renderer ? gl_renderer : "(null)");
   }
 
   {
@@ -300,11 +507,22 @@ static std::shared_ptr<GfxDisplay> gl_make_display(int width,
   {
     auto p = scoped_prof("startup::sdl::init_imgui");
     // setup imgui
+    //
+    // imgui compiles its own shaders from this prologue, so it needs the same
+    // dialect the rest of the tree gets from shader_prologue() -- a desktop
+    // "#version 410" against a GLES 3.0 context would compile-fail at imgui's
+    // first frame rather than at init. imgui selects a dedicated 300 es shader
+    // pair on an exact "#version 300" match (imgui_impl_opengl3.cpp), and it
+    // detects GlProfileIsES3 itself from the GL_VERSION string ANGLE reports.
+    if (gfx_backend_is_angle()) {
+      init_imgui(window, gl_context, "#version 300 es");
+    } else {
 #ifdef __APPLE__
-    init_imgui(window, gl_context, "#version 410");
+      init_imgui(window, gl_context, "#version 410");
 #else
-    init_imgui(window, gl_context, "#version 430");
+      init_imgui(window, gl_context, "#version 430");
 #endif
+    }
   }
 
   return std::static_pointer_cast<GfxDisplay>(display);
@@ -356,6 +574,12 @@ void GLDisplay::init_splash() {
   auto frag_src =
       file_util::read_text_file(file_util::get_file_path({shader_folder, "splash.frag"}));
 
+  // The on-disk shaders carry no `#version`; it is injected here, exactly as
+  // ShaderLibrary does for the shaders it owns. Use the shared builder rather
+  // than a local copy so the two sites cannot drift apart.
+  vert_src = shader_prologue(gfx_shader_backend(), false) + vert_src;
+  frag_src = shader_prologue(gfx_shader_backend(), true) + frag_src;
+
   constexpr int len = 1024;
   GLint compile_ok;
   char err[len];
@@ -367,7 +591,13 @@ void GLDisplay::init_splash() {
     glGetShaderiv(s, GL_COMPILE_STATUS, &compile_ok);
     if (!compile_ok) {
       glGetShaderInfoLog(s, len, nullptr, err);
-      lg::error("splash shader compile failed: {}\n", err);
+      // init_splash runs once per frame until it succeeds, so an unconditional
+      // log here spams a line per frame for the whole load. Report once.
+      static bool reported = false;
+      if (!reported) {
+        reported = true;
+        lg::error("splash shader compile failed: {}", err);
+      }
       glDeleteShader(s);
       return 0;
     }
@@ -392,7 +622,12 @@ void GLDisplay::init_splash() {
   glGetProgramiv(m_splash_program, GL_LINK_STATUS, &compile_ok);
   if (!compile_ok) {
     glGetProgramInfoLog(m_splash_program, len, nullptr, err);
-    lg::error("Failed to link splash shader:\n{}", err);
+    // as above: this path retries every frame, so report the failure once.
+    static bool link_reported = false;
+    if (!link_reported) {
+      link_reported = true;
+      lg::error("Failed to link splash shader:\n{}", err);
+    }
     glDeleteProgram(m_splash_program);
     m_splash_program = 0;
     return;
@@ -514,6 +749,7 @@ void render_game_frame(int game_width,
     }
     // note : it's important we call get_screenshot_flag first because it modifies state
     if (g_gfx_data->debug_gui.get_screenshot_flag() || g_want_screenshot) {
+      const bool from_host_trigger = g_want_screenshot;
       g_want_screenshot = false;
       options.save_screenshot = true;
       options.internal_res_screenshot = true;
@@ -524,8 +760,15 @@ void render_game_frame(int game_width,
       options.draw_region_width = options.game_res_w;
       options.draw_region_height = options.game_res_h;
       options.msaa_samples = g_screen_shot_settings->msaa;
-      options.screenshot_path =
-          file_util::make_screenshot_filepath(g_game_version, get_screen_shot_name());
+      // A host trigger (GK_SCREENSHOT_AT_FRAME) may name an exact output path, so an
+      // automated capture lands somewhere predictable instead of a timestamped file.
+      const char* host_path = from_host_trigger ? get_host_trigger_screenshot_path() : "";
+      if (host_path && host_path[0]) {
+        options.screenshot_path = host_path;
+      } else {
+        options.screenshot_path =
+            file_util::make_screenshot_filepath(g_game_version, get_screen_shot_name());
+      }
     }
 
     options.draw_small_profiler_window =
@@ -537,6 +780,26 @@ void render_game_frame(int game_width,
     if (options.msaa_samples > msaa_max) {
       options.msaa_samples = msaa_max;
     }
+
+    // MSAA ran clamped to 1 on ANGLE for three sessions. The clamp is GONE, and both
+    // reasons it existed are closed -- recorded here so it is not reinstated on the
+    // strength of an old commit message.
+    //
+    // It was installed because the resolve blit in do_pcrtc_effects crashed inside
+    // ANGLE's Metal backend. That crash was never MSAA's: it was the vertex-attribute
+    // type mismatch fixed in 66d3b8b6ce. With that fix in, jak1 reaches village1 at
+    // msaa 4 on ANGLE under MTL_DEBUG_LAYER=1 with the resolve buffer live and zero
+    // Metal assertions.
+    //
+    // It was then KEPT for a second, backend-independent defect: the sprite-distort
+    // blit read the multisampled render FBO into a GL_RGB8 destination, and a resolve
+    // between mismatched colour formats is GL_INVALID_OPERATION. That is fixed
+    // (Sprite3_Distort.cpp now allocates GL_RGBA8) and measured clean at msaa 4 on
+    // both backends -- AppleGL 1300 errored blits/boot -> 0, ANGLE 291 -> 0.
+    //
+    // Note the defect was never ANGLE-specific: AppleGL ships at msaa 4 and was
+    // dropping that blit every frame in the shipping configuration. The clamp had
+    // been hiding it on ANGLE, which is why it surfaced last.
 
     if constexpr (run_dma_copy) {
       auto& chain = g_gfx_data->dma_copier.get_last_result();
@@ -656,6 +919,10 @@ void GLDisplay::render() {
         SplashTimer.getSeconds() < SPLASH_SCREEN_TIME) {
       draw_splash(fbuf_w, fbuf_h);
     }
+
+    // Host-side screenshot trigger, for automated reference captures. Checked here so
+    // it counts exactly the frames that actually render.
+    screenshot_check_host_trigger();
 
     render_game_frame(
         game_res_w, game_res_h, fbuf_w, fbuf_h, Gfx::g_global_settings.lbox_w,

@@ -1,5 +1,3 @@
-#version 410 core
-
 in vec4 color;
 out vec4 out_color;
 

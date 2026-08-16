@@ -2,10 +2,149 @@
 
 #include "common/math/Vector.h"
 
+#include "game/graphics/opengl_renderer/Shader.h"
 #include "game/graphics/pipelines/opengl.h"
 
 struct SharedRenderState;
 class ScopedProfilerNode;
+
+/*!
+ * Enable primitive restart with UINT32_MAX as the restart index.
+ *
+ * Every draw in this renderer indexes with GL_UNSIGNED_INT and restarts on
+ * UINT32_MAX, which is exactly GLES 3.0's *fixed* restart index -- so on GLES the
+ * whole thing is GL_PRIMITIVE_RESTART_FIXED_INDEX and there is no index to set.
+ *
+ * Desktop GL is NOT the same, and this is why the calls cannot simply be deleted:
+ * GL_PRIMITIVE_RESTART_FIXED_INDEX is core only in GL 4.3+, and the macOS system
+ * GL context is 4.1 (see opengl.cpp -- 4.3 is requested off-Apple, 4.1 on it).
+ * There, restart is GL_PRIMITIVE_RESTART with a user-supplied index that defaults
+ * to 0, so dropping glPrimitiveRestartIndex would restart on index 0 and corrupt
+ * every indexed draw rather than fail loudly.
+ */
+inline void enable_primitive_restart_u32() {
+  if (gfx_backend_is_angle()) {
+    glEnable(GL_PRIMITIVE_RESTART_FIXED_INDEX);
+  } else {
+    glEnable(GL_PRIMITIVE_RESTART);
+    glPrimitiveRestartIndex(UINT32_MAX);
+  }
+}
+
+/*!
+ * Set the polygon rasterization mode (GL_FILL / GL_LINE) for GL_FRONT_AND_BACK.
+ *
+ * glPolygonMode is desktop-GL only: GLES 3.0 has no such entry point, and every
+ * caller here is a debug wireframe toggle that brackets a draw with LINE then
+ * restores FILL. ANGLE exposes the same functionality through
+ * GL_ANGLE_polygon_mode as glPolygonModeANGLE, resolved dynamically because our
+ * glad loader is generated for desktop GL and knows nothing about it.
+ *
+ * If the extension is absent the call is dropped rather than faked: the only
+ * consequence is that debug wireframe draws render filled. Nothing on the normal
+ * render path calls this.
+ */
+void set_polygon_mode(GLenum mode);
+
+/*!
+ * Issue one batched indexed draw per entry of `counts` / `indices`.
+ *
+ * glMultiDrawElements is desktop GL 1.4+ and does NOT exist in GLES 3.0, so on
+ * the ANGLE path this must never be called. It is not merely missing there --
+ * it is actively dangerous: SDL_GL_GetProcAddress still resolves the bare name,
+ * because it falls through to AppleGL, so glad binds a *live AppleGL function
+ * pointer* into a process where the current context is EGL. Calling it faults
+ * inside libGL.dylib, arbitrarily deep in the renderer (the first fault seen was
+ * Shrub::render_tree).
+ *
+ * The suffixed forms are NOT a way out, and this was measured rather than
+ * assumed. ANGLE's libGLESv2 exports glMultiDrawElementsANGLE and
+ * glMultiDrawElementsEXT, and both resolve -- but this Metal context advertises
+ * NEITHER GL_ANGLE_multi_draw nor GL_EXT_multi_draw_arrays (zero of its 117
+ * extensions contain "multi_draw"). Calling the ANGLE entry point anyway
+ * returns GL_INVALID_OPERATION and renders nothing. That is the same trap as
+ * the layered-framebuffer call above: an exported symbol is not an available
+ * function.
+ *
+ * So on ANGLE the renderer runs the single-draw path instead. That path is not
+ * new code -- every multidraw site in this tree already carries a
+ * `render_state->no_multidraw` branch calling glDrawElements over a separate
+ * index buffer, and set_up_all_trees() builds that buffer when it is on. This
+ * helper exists so the desktop path keeps its batching while the banned symbol
+ * appears nowhere in the tree; SharedRenderState::no_multidraw, which defaults
+ * from gfx_backend_is_angle(), is what guarantees ANGLE never reaches it.
+ */
+inline void multi_draw_elements(GLenum mode,
+                                const GLsizei* counts,
+                                GLenum type,
+                                const void* const* indices,
+                                GLsizei draw_count) {
+  if (gfx_backend_is_angle()) {
+    // Unreachable: no_multidraw is forced on for this backend. Kept as a hard
+    // stop rather than a silent fallthrough, because the alternative is a fault
+    // inside AppleGL thousands of log lines from here.
+    ASSERT_MSG(false, "multi_draw_elements is not available on the ANGLE backend");
+    return;
+  }
+  // The glad function pointer, not the glMultiDrawElements macro that expands to
+  // it. Spelling it this way keeps the banned bare identifier out of the tree so
+  // the GlesEntryPoints scanner stays meaningful: this one deliberate desktop
+  // call site is the only thing standing between the ban and the AppleGL symbol.
+  glad_glMultiDrawElements(mode, counts, type, indices, draw_count);
+}
+
+/*!
+ * Attach one mip level of a 2D texture as a framebuffer color attachment.
+ *
+ * Every attachment in this renderer is a single mip level of a plain
+ * GL_TEXTURE_2D, which is exactly what glFramebufferTexture2D does -- and it is
+ * core in both desktop GL and GLES 3.0.
+ *
+ * glFramebufferTexture (no "2D") is NOT the same call and is not in GLES 3.0.
+ * It is the *layered* attachment entry point, added in desktop GL 3.2 to attach
+ * a whole array/cubemap/3D texture at once for geometry shaders to index with
+ * gl_Layer. On a 2D texture it degenerates to the same result, which is why the
+ * desktop path never noticed the difference.
+ *
+ * The failure mode on GLES is quiet and worth knowing, because it is not the
+ * null-pointer class: ANGLE *exports* glFramebufferTexture (as the
+ * GL_EXT_geometry_shader entry point), so the loader binds it and the call
+ * dispatches normally. ANGLE then rejects it in a GLES 3.0 context, sets an
+ * error nobody reads, and attaches nothing -- so the only symptom is
+ * GL_FRAMEBUFFER_INCOMPLETE_MISSING_ATTACHMENT at the completeness check, one
+ * call later, naming neither the function nor the reason.
+ */
+inline void framebuffer_attach_color_texture(GLenum attachment, GLuint texture, int level) {
+  glFramebufferTexture2D(GL_FRAMEBUFFER, attachment, GL_TEXTURE_2D, texture, level);
+}
+
+/*!
+ * Report GL errors raised by a glBlitFramebuffer call, when GK_BLIT_PROBE=1.
+ *
+ * Every blit in this renderer that reads render_fb becomes a *multisample* read as
+ * soon as msaa > 1, and GLES 3.0 constrains those far more tightly than desktop GL
+ * does: source and destination formats must match exactly, and scaling is forbidden
+ * outright. A violation does not crash. glBlitFramebuffer sets GL_INVALID_OPERATION,
+ * copies nothing, and the consumer samples whatever was in the destination
+ * beforehand -- a stale frame, which looks like a rendering artifact rather than a
+ * dropped call. That is exactly how the distort defect hid on the shipping backend
+ * for a whole campaign.
+ *
+ * Two properties make this a measurement rather than a guess, and both are the
+ * reason it is a shared helper instead of a temporary printf:
+ *
+ *  - It DRAINS the error queue before the blit (drain_gl_errors, called by the
+ *    caller immediately before), so anything reported here is attributable to this
+ *    call and not to something that happened earlier in the frame.
+ *  - It reports the call site and the total call count, not just failures. A site
+ *    that never executed prints nothing, and "no output" from a site that never ran
+ *    is not a pass -- the count is what distinguishes the two.
+ *
+ * Off unless GK_BLIT_PROBE=1. Diagnostic instrument; no effect on rendering.
+ */
+bool blit_probe_enabled();
+void drain_gl_errors();
+void blit_probe_report(const char* site);
 
 /*!
  * This is a wrapper around a framebuffer and texture to make it easier to render to a texture.

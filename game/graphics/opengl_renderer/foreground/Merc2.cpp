@@ -6,6 +6,7 @@
 
 #include "game/graphics/opengl_renderer/EyeRenderer.h"
 #include "game/graphics/opengl_renderer/background/background_common.h"
+#include "game/graphics/opengl_renderer/opengl_utils.h"
 
 #include "third-party/imgui/imgui.h"
 
@@ -1120,8 +1121,7 @@ Merc2::Draw* Merc2::alloc_normal_draw(const tfrag3::MercDraw& mdraw, const DrawA
 }
 
 void Merc2::setup_merc_vao() {
-  glEnable(GL_PRIMITIVE_RESTART);
-  glPrimitiveRestartIndex(UINT32_MAX);
+  enable_primitive_restart_u32();
   glEnableVertexAttribArray(0);
   glEnableVertexAttribArray(1);
   glEnableVertexAttribArray(2);

@@ -1,0 +1,57 @@
+From: OpenGOAL ARM64 macOS port
+Subject: [PATCH] Metal: invalidate context state when a flush ends the render encoder
+
+BufferManager::getBuffer calls ContextMtl::flushCommandBuffer directly to
+service an allocation, which can happen while a render pass is open. That
+flush ends the render encoder, and RenderCommandEncoder::reset() clears
+mPipelineStateSet while endEncodingImpl() resets mStateCache -- but unlike
+getRenderPassCommandEncoder(), which explicitly does mDirtyBits.set() after
+ending an encoder, this path leaves mDirtyBits untouched.
+
+The next setupDraw() therefore sees DIRTY_BIT_RENDER_PIPELINE clear,
+checkIfPipelineChanged() reports no change, and no setRenderPipelineState is
+emitted onto the newly restarted encoder. The draw is then encoded with no
+pipeline state bound, tripping
+
+    ASSERT(mPipelineStateSet &&
+           "Render Pipeline State was never set and we've issued a draw command.");
+
+in debug builds. In release builds the ASSERT is compiled out and the draw
+reaches Metal, which dereferences a null render-context pointer inside
+-[AGXG16XFamilyRenderContext drawIndexedPrimitives:...].
+
+Restore the same postcondition getRenderPassCommandEncoder documents, at the
+point the encoder is actually destroyed. Gated on mRenderEncoder.valid() so
+flushes with no live render encoder are unaffected.
+
+Base revision: aa192212af54
+
+diff --git a/src/libANGLE/renderer/metal/ContextMtl.mm b/src/libANGLE/renderer/metal/ContextMtl.mm
+--- a/src/libANGLE/renderer/metal/ContextMtl.mm
++++ b/src/libANGLE/renderer/metal/ContextMtl.mm
+@@ void ContextMtl::flushCommandBuffer(mtl::CommandBufferFinishOperation operation)
+ {
+     mRenderPassesSinceFlush = 0;
+     if (mCmdBuffer.ready())
+     {
++        // Ending the render encoder resets its state (RenderCommandEncoder::reset
++        // clears mPipelineStateSet, and endEncodingImpl resets mStateCache), so any
++        // state we believe is already applied to it is gone. Callers that reach here
++        // from outside getRenderPassCommandEncoder (e.g. BufferManager::getBuffer
++        // flushing to service an allocation mid-render-pass) would otherwise leave
++        // mDirtyBits clear, and the next setupDraw would encode a draw with no
++        // render pipeline state bound.
++        const bool hadRenderEncoder = mRenderEncoder.valid();
+         endEncoding(true);
++        if (hadRenderEncoder)
++        {
++            mDirtyBits.set();
++        }
+         mCmdBuffer.commit(operation);
+         mBufferManager.incrementNumCommandBufferCommits();
+     }
+     else
+     {
+         mCmdBuffer.wait(operation);
+     }
+ }

@@ -2,6 +2,7 @@
 
 #include "Generic2.h"
 #include "game/graphics/gfx.h"
+#include "game/graphics/opengl_renderer/opengl_utils.h"
 
 void Generic2::opengl_setup(ShaderLibrary& shaders) {
   // create OpenGL objects
@@ -305,8 +306,7 @@ void Generic2::do_draws(SharedRenderState* render_state, ScopedProfilerNode& pro
                GL_STREAM_DRAW);
   glBufferData(GL_ARRAY_BUFFER, m_next_free_vert * sizeof(Vertex), m_verts.data(), GL_STREAM_DRAW);
 
-  glEnable(GL_PRIMITIVE_RESTART);
-  glPrimitiveRestartIndex(UINT32_MAX);
+  enable_primitive_restart_u32();
 
   opengl_bind_and_setup_proj(render_state);
   if (m_drawing_config.uses_full_matrix) {

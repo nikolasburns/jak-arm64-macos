@@ -1,5 +1,12 @@
 # OpenGOAL on Apple Silicon — native ARM64 macOS, Jak 1, Jak 2 **and** Jak 3
 
+> **You are on the `angle-backend` branch.** It is `main` plus an opt-in
+> **ANGLE-Metal graphics backend** (GLES 3.0 → Metal), verified at
+> [`v1.1-angle-verified`](#the-angle-metal-backend-this-branch). AppleGL remains
+> the default and the shipping backend; nothing changes unless you set
+> `GK_GFX_BACKEND=angle`. See **[The ANGLE-Metal backend](#the-angle-metal-backend-this-branch)**
+> and the **[branch map](#branch-map)**.
+
 Run **Jak and Daxter: The Precursor Legacy**, **Jak II** and **Jak 3** natively
 on Apple Silicon. No Rosetta, no translation layer — the GOAL compiler emits
 ARM64 directly and the runtime executes it.
@@ -167,6 +174,139 @@ Exit codes worth knowing: **132** = SIGILL (wrong-arch objects — you missed
 **139** = SIGSEGV. A clean quit exits 0 and logs `GOAL Runtime Shutdown`.
 
 For Jak 2 or Jak 3, substitute `jak2` / `jak3` throughout.
+
+---
+
+## The ANGLE-Metal backend (this branch)
+
+`angle-backend` adds a second graphics backend: OpenGL ES 3.0 running on
+**ANGLE**'s Metal backend, instead of Apple's desktop GL 4.1 driver. macOS
+deprecated OpenGL years ago; this is the path off it that keeps the existing
+renderer rather than rewriting it.
+
+**AppleGL is still the default and still the shipping backend.** ANGLE is
+entirely opt-in — with no environment variable set, this branch behaves exactly
+like `main`.
+
+### Using it
+
+Two variables. `GK_ANGLE_DIR` **must be absolute** (`libEGL.dylib`'s install
+name is the relative `./libEGL.dylib`, so a bare name would only resolve against
+the working directory):
+
+```sh
+GK_GFX_BACKEND=angle GK_ANGLE_DIR="$PWD/third_party/angle-bin" \
+  ./build/game/gk.app/Contents/MacOS/gk -v --game jak1 -- -boot -fakeiso
+```
+
+`GK_GFX_BACKEND` accepts `angle` or `applegl`; anything else logs a warning and
+falls back to AppleGL. The dylibs are **tracked in this repo**
+(`third_party/angle-bin`, ~16 MB, pinned at ANGLE `aa192212af54`) — nothing links
+against them, SDL `dlopen`s them at context creation. Without them only the ANGLE
+path fails, at context creation, with SDL's own error.
+
+### Verifying it actually loaded — one line
+
+**"The shim loaded" is not the result.** ANGLE self-selects its backend, and its
+default on this build is the *GL* backend — GLES emulated on the very Apple GL
+driver ANGLE exists to replace. That produces a perfectly working context and a
+plausible log line, so it reads as success while being the wrong backend. The
+code sets `ANGLE_DEFAULT_PLATFORM=metal` to prevent this, but the check is still
+the renderer string, not the absence of errors:
+
+```sh
+grep 'OpenGL initialized' log/jak1.*.log
+```
+
+```
+OpenGL initialized - v3.3 | Version: OpenGL ES 3.0 (ANGLE 2.1.1 git hash: aa192212af54) | Renderer: ANGLE (Apple, ANGLE Metal Renderer: Apple M4 Pro, Version 26.6.1 (Build 25G76))
+```
+
+Two things that one line settles: **`ANGLE Metal Renderer` must appear** (if it
+reads `OpenGL 4.1 Metal - 90.5`, you are on ANGLE's GL backend, not Metal), and
+the **git hash authenticates the binary** — these dylibs state their own
+provenance at runtime, so there is no checksum file to drift. If the hash does
+not match `aa192212af54`, the process loaded a different ANGLE than the one
+committed here. Check this line before diagnosing anything backend-shaped.
+
+`ANGLE_DEFAULT_PLATFORM=gl` is deliberately left reachable, for deciding whether
+a defect belongs to ANGLE's frontend or to Metal.
+
+### Reproducing the dylibs
+
+Only needed to move to a newer ANGLE revision. The full recipe —  `args.gn`, the
+~22 min build, and **two macOS prerequisites ANGLE's own `DevSetup.md` does not
+mention** (`DEVELOPER_DIR` must point at Xcode, not CommandLineTools; Xcode 26
+omits the Metal compiler and needs `xcodebuild -downloadComponent MetalToolchain`)
+— is in **[third_party/angle-bin/README.md](third_party/angle-bin/README.md)**,
+with the trap that `angle_enable_gl=false` silently disables the output
+translator.
+
+A **debug** build of ANGLE is a separate artifact and worth knowing about: it
+compiles ANGLE's own `ASSERT`s in, which turn an opaque null-deref inside Metal
+into a named one-line assertion. That build was the instrument that resolved this
+campaign's hardest bug — and it proved the defect was *ours*, not ANGLE's. It is
+not kept (17 GB); rebuild it if you need to diagnose rather than run.
+
+### Status, honestly
+
+**Verified at the tested scope**, tagged `v1.1-angle-verified`: an instrumented
+12-cell matrix (3 games × 2 backends × MSAA 1/4) came back clean with zero Metal
+validation asserts, and all three games boot to gameplay territory. The visual
+pass was **informal** — the user's own playtests across the campaign, reported as
+"no anomalies observed" — not a structured checklist.
+
+The residuals, named rather than buried:
+
+- **`DepthCue` and `hfrag` have never executed** anywhere reachable in testing.
+  That is *untested, not passing* — no output from a site that never ran is not a
+  pass. (DepthCue needs Jak 2's opening cutscene; hfrag needs the Jak 3
+  wasteland.)
+- **A magenta sky artifact near Sandover Village** (around the TM boot screen) is
+  cosmetic and its attribution is open — asset versus shared path, backend
+  unconfirmed. The sky FBOs are `GL_RGBA8`, so it is not a pixel-format defect.
+- **Deterministic frame capture was abandoned**, so the standard here is
+  instrumented boots plus human observation. An eye cannot see a uniform colour
+  shift, a slow drift, or the *absence* of a subtle effect — which is exactly why
+  the blit probe counts **calls** as well as errors.
+- **The `KHR_debug` callback is inert on this path**, and the boot says so
+  unprompted: SDL's EGL path does not create a debug context, so
+  `GL_CONTEXT_FLAGS = 0` and GL errors are never delivered to the callback. **A
+  quiet ANGLE log is not evidence.** Use `GK_BLIT_PROBE` / explicit `glGetError`
+  point probes, which is why they exist.
+
+### Instruments on this branch
+
+All opt-in, all off unless set, all safe to leave in place:
+
+| Variable | What it does |
+|---|---|
+| `GK_BLIT_PROBE=1` | Per-site **call and error** counts at every multisample-read blit, with the GL error queue drained first so a report is attributable. The call count is the point: it distinguishes "clean" from "never executed". |
+| `GK_MSAA=<n>` | Pins a run's sample count without touching your `pc-settings.gc`. Rejects non-powers-of-two rather than running at an unintended count. |
+| `GK_SCREENSHOT_AT_FRAME=<frame>[,<path>]` | Captures a frame from the host side, on either backend. |
+| `GK_SCREENSHOT_AGAIN_AFTER=<n>` | A second capture `n` frames later *in the same run* — which separates "the scene is animating" from "the two runs started in different states". |
+| `GK_FREEZE_AT_DISPATCH=<n>` | Holds pause mode from dispatch `n` via `set-master-mode`, so actors stop and not just the clocks. |
+| `MTL_DEBUG_LAYER=1` | Not ours — Apple's. **Reach for it first on any ANGLE-Metal fault**; it converts a null deref inside a closed-source driver into a named assertion. |
+
+### Branch map
+
+| Branch | What it is |
+|---|---|
+| **`main`** | The stable trilogy. An **AppleGL-only** story. |
+| **`angle-backend`** | This branch: the ANGLE-Metal backend and the campaign's instruments, preserved as a working copy. |
+| **`rt-ao`** | The ray-traced ambient-occlusion campaign, built on top of this branch. |
+
+Sync is one-way and periodic, `main` → `angle-backend` → `rt-ao`.
+
+Three defects found *only* because this campaign built the instruments that could
+see them turned out to be **backend-independent**, and two were ported to `main`
+as minimal format-only changes: a distort FBO missing its alpha channel (failing
+1300/1300 blits on AppleGL at MSAA 4) and a glow-probe depth format mismatch
+(100% of calls failing on both backends). The third — a vertex-attribute type
+mismatch — has no observable effect on desktop GL, which silently widens `u16`
+into an `int` attribute where Metal rejects it, and so stays here.
+
+---
 
 ## Package as a standalone `.app`
 

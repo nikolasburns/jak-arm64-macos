@@ -1,5 +1,7 @@
 #include "Tie3.h"
 
+#include "game/graphics/opengl_renderer/opengl_utils.h"
+
 #include "common/global_profiler/GlobalProfiler.h"
 #include "common/log/log.h"
 #include "common/util/Assert.h"
@@ -188,11 +190,11 @@ void Tie3::load_from_fr3_data(const LevelData* loader_data) {
       // set up time of day texture.
       glActiveTexture(GL_TEXTURE10);
       glGenTextures(1, &lod_tree[l_tree].time_of_day_texture);
-      glBindTexture(GL_TEXTURE_1D, lod_tree[l_tree].time_of_day_texture);
-      glTexImage1D(GL_TEXTURE_1D, 0, GL_RGBA, TIME_OF_DAY_COLOR_COUNT, 0, GL_RGBA,
-                   GL_UNSIGNED_INT_8_8_8_8, nullptr);
-      glTexParameteri(GL_TEXTURE_1D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-      glTexParameteri(GL_TEXTURE_1D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+      glBindTexture(GL_TEXTURE_2D, lod_tree[l_tree].time_of_day_texture);
+      glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, TIME_OF_DAY_COLOR_COUNT, 1, 0, GL_RGBA,
+                   GL_UNSIGNED_BYTE, nullptr);
+      glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+      glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
 
       glBindVertexArray(0);
 
@@ -262,7 +264,7 @@ bool Tie3::try_loading_level(const std::string& level, SharedRenderState* render
 void Tie3::discard_tree_cache() {
   for (int geo = 0; geo < 4; ++geo) {
     for (auto& tree : m_trees[geo]) {
-      glBindTexture(GL_TEXTURE_1D, tree.time_of_day_texture);
+      glBindTexture(GL_TEXTURE_2D, tree.time_of_day_texture);
       glDeleteTextures(1, &tree.time_of_day_texture);
       // glDeleteBuffers(1, &tree.index_buffer);
       glDeleteBuffers(1, &tree.single_draw_index_buffer);
@@ -436,9 +438,9 @@ void Tie3::setup_tree(int idx,
   interp_time_of_day(settings.camera.itimes, *tree.colors, m_color_result.data());
 
   glActiveTexture(GL_TEXTURE10);
-  glBindTexture(GL_TEXTURE_1D, tree.time_of_day_texture);
-  glTexSubImage1D(GL_TEXTURE_1D, 0, 0, tree.colors->color_count, GL_RGBA,
-                  GL_UNSIGNED_INT_8_8_8_8_REV, m_color_result.data());
+  glBindTexture(GL_TEXTURE_2D, tree.time_of_day_texture);
+  glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, tree.colors->color_count, 1, GL_RGBA,
+                  GL_UNSIGNED_BYTE, m_color_result.data());
 
   // update proto vis mask
   if (proto_vis_data) {
@@ -557,11 +559,10 @@ void Tie3::draw_matching_draws_for_tree(int idx,
                render_state->no_multidraw ? tree.single_draw_index_buffer : tree.index_buffer);
 
   glActiveTexture(GL_TEXTURE10);
-  glBindTexture(GL_TEXTURE_1D, tree.time_of_day_texture);
+  glBindTexture(GL_TEXTURE_2D, tree.time_of_day_texture);
 
   glActiveTexture(GL_TEXTURE0);
-  glEnable(GL_PRIMITIVE_RESTART);
-  glPrimitiveRestartIndex(UINT32_MAX);
+  enable_primitive_restart_u32();
 
   int last_texture = -1;
   for (size_t draw_idx = tree.category_draw_indices[(int)category];
@@ -601,7 +602,7 @@ void Tie3::draw_matching_draws_for_tree(int idx,
       glDrawElements(tree.draw_mode, singledraw_indices.second, GL_UNSIGNED_INT,
                      (void*)(singledraw_indices.first * sizeof(u32)));
     } else {
-      glMultiDrawElements(
+      multi_draw_elements(
           tree.draw_mode, &tree.multidraw_count_buffer[multidraw_indices.first], GL_UNSIGNED_INT,
           &tree.multidraw_index_offset_buffer[multidraw_indices.first], multidraw_indices.second);
     }
@@ -621,7 +622,7 @@ void Tie3::draw_matching_draws_for_tree(int idx,
           glDrawElements(tree.draw_mode, singledraw_indices.second, GL_UNSIGNED_INT,
                          (void*)(singledraw_indices.first * sizeof(u32)));
         } else {
-          glMultiDrawElements(tree.draw_mode, &tree.multidraw_count_buffer[multidraw_indices.first],
+          multi_draw_elements(tree.draw_mode, &tree.multidraw_count_buffer[multidraw_indices.first],
                               GL_UNSIGNED_INT,
                               &tree.multidraw_index_offset_buffer[multidraw_indices.first],
                               multidraw_indices.second);
@@ -694,7 +695,7 @@ void Tie3::envmap_second_pass_draw(const Tree& tree,
       glDrawElements(tree.draw_mode, singledraw_indices.second, GL_UNSIGNED_INT,
                      (void*)(singledraw_indices.first * sizeof(u32)));
     } else {
-      glMultiDrawElements(
+      multi_draw_elements(
           tree.draw_mode, &tree.multidraw_count_buffer[multidraw_indices.first], GL_UNSIGNED_INT,
           &tree.multidraw_index_offset_buffer[multidraw_indices.first], multidraw_indices.second);
     }
@@ -939,11 +940,10 @@ void Tie3::render_tree_wind(int idx,
                render_state->no_multidraw ? tree.single_draw_index_buffer : tree.index_buffer);
 
   glActiveTexture(GL_TEXTURE10);
-  glBindTexture(GL_TEXTURE_1D, tree.time_of_day_texture);
+  glBindTexture(GL_TEXTURE_2D, tree.time_of_day_texture);
 
   glActiveTexture(GL_TEXTURE0);
-  glEnable(GL_PRIMITIVE_RESTART);
-  glPrimitiveRestartIndex(UINT32_MAX);
+  enable_primitive_restart_u32();
 
   int last_texture = -1;
   glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, tree.wind_vertex_index_buffer);

@@ -1,5 +1,7 @@
 #include "GlowRenderer.h"
 
+#include "game/graphics/opengl_renderer/opengl_utils.h"
+
 #include "third-party/imgui/imgui.h"
 
 /*
@@ -538,7 +540,8 @@ void GlowRenderer::blit_depth(SharedRenderState* render_state) {
     // GL_DEPTH24_STENCIL8, matching BOTH the format this texture is created with
     // (see the constructor above, which validates the FBO with
     // glCheckFramebufferStatus) and the depth attachment of the framebuffer this
-    // blits FROM -- render_fb's depth renderbuffer is GL_DEPTH24_STENCIL8.
+    // blits FROM -- render_fb's depth renderbuffer is GL_DEPTH24_STENCIL8
+    // (OpenGLRenderer.cpp:948/950).
     //
     // glBlitFramebuffer with GL_DEPTH_BUFFER_BIT requires the source and
     // destination depth formats to match EXACTLY; 24-bit depth alone is a
@@ -553,8 +556,9 @@ void GlowRenderer::blit_depth(SharedRenderState* render_state) {
     // construction was overwritten before it was ever used, and the blit never
     // worked at all.
     //
-    // Measured at 100% failure (e.g. 900 of 900 calls in a jak2 boot) at both
-    // msaa 1 and msaa 4: this is neither multisample- nor backend-specific.
+    // Measured before the fix at 100% failure (900 of 900 calls in a jak2 boot) on
+    // BOTH backends and at BOTH msaa 1 and msaa 4: this was never multisample- or
+    // ANGLE-specific, and it was live on the shipping backend.
     glBindTexture(GL_TEXTURE_2D, m_ogl.probe_fbo_depth_tex);
     glTexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH24_STENCIL8, m_ogl.probe_fbo_w, m_ogl.probe_fbo_h, 0,
                  GL_DEPTH_STENCIL, GL_UNSIGNED_INT_24_8, NULL);
@@ -564,6 +568,7 @@ void GlowRenderer::blit_depth(SharedRenderState* render_state) {
   glBindFramebuffer(GL_READ_FRAMEBUFFER, render_state->render_fb);
   glBindFramebuffer(GL_DRAW_FRAMEBUFFER, m_ogl.probe_fbo);
 
+  drain_gl_errors();
   glBlitFramebuffer(0,                          // srcX0
                     0,                          // srcY0
                     render_state->render_fb_w,  // srcX1
@@ -575,6 +580,7 @@ void GlowRenderer::blit_depth(SharedRenderState* render_state) {
                     GL_DEPTH_BUFFER_BIT,        // mask
                     GL_NEAREST                  // filter
   );
+  blit_probe_report("GlowRenderer:probe_depth");
 }
 
 void GlowRenderer::draw_debug_window() {
@@ -592,8 +598,7 @@ void GlowRenderer::downsample_chain(SharedRenderState* render_state,
                                     ScopedProfilerNode& prof,
                                     u32 num_sprites) {
   glBindVertexArray(m_ogl_downsampler.vao);
-  glEnable(GL_PRIMITIVE_RESTART);
-  glPrimitiveRestartIndex(UINT32_MAX);
+  enable_primitive_restart_u32();
   GLint old_viewport[4];
   glGetIntegerv(GL_VIEWPORT, old_viewport);
   render_state->shaders[ShaderId::GLOW_PROBE_DOWNSAMPLE].activate();
@@ -621,8 +626,7 @@ void GlowRenderer::downsample_chain(SharedRenderState* render_state,
 void GlowRenderer::setup_buffers_for_draws() {
   glBindFramebuffer(GL_FRAMEBUFFER, m_ogl.probe_fbo);
   glBindVertexArray(m_ogl.vao);
-  glEnable(GL_PRIMITIVE_RESTART);
-  glPrimitiveRestartIndex(UINT32_MAX);
+  enable_primitive_restart_u32();
   // don't want to write to the depth buffer we just copied, just test against it.
   glDepthMask(GL_FALSE);
   glBindBuffer(GL_ARRAY_BUFFER, m_ogl.vertex_buffer);
@@ -828,8 +832,7 @@ void GlowRenderer::flush(SharedRenderState* render_state, ScopedProfilerNode& pr
 void GlowRenderer::draw_sprites(SharedRenderState* render_state, ScopedProfilerNode& prof) {
   glBindFramebuffer(GL_FRAMEBUFFER, render_state->render_fb);
   glBindVertexArray(m_ogl.vao);
-  glEnable(GL_PRIMITIVE_RESTART);
-  glPrimitiveRestartIndex(UINT32_MAX);
+  enable_primitive_restart_u32();
 
   glActiveTexture(GL_TEXTURE1);
   glBindTexture(GL_TEXTURE_2D, m_ogl.downsample_fbos[kDownsampleIterations - 1].tex);

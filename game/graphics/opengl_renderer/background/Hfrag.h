@@ -19,7 +19,7 @@ class Hfrag : public BucketRenderer {
 
   struct MontageTexture {
     FramebufferTexturePair fb;
-    MontageTexture() : fb(128, 128, GL_UNSIGNED_INT_8_8_8_8_REV) {}
+    MontageTexture() : fb(128, 128, GL_UNSIGNED_BYTE) {}
   };
 
   struct HfragLevel {

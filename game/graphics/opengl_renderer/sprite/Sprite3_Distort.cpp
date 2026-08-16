@@ -1,5 +1,6 @@
 #include "Sprite3.h"
 #include "game/graphics/opengl_renderer/dma_helpers.h"
+#include "game/graphics/opengl_renderer/opengl_utils.h"
 
 namespace {
 /*!
@@ -24,10 +25,10 @@ void Sprite3::opengl_setup_distort() {
   glGenTextures(1, &m_distort_ogl.fbo_texture);
   glBindTexture(GL_TEXTURE_2D, m_distort_ogl.fbo_texture);
 
-  // GL_RGBA8, not GL_RGB: distort_draw_common resolves the render framebuffer into
+  // GL_RGBA8, not GL_RGB8: distort_draw_common resolves the render framebuffer into
   // this texture with glBlitFramebuffer, and at msaa != 1 that read is multisampled.
   // A multisample resolve requires the source and destination color formats to MATCH
-  // -- an RGB destination against the RGBA8 render buffer is GL_INVALID_OPERATION,
+  // -- an RGB8 destination against the RGBA8 render buffer is GL_INVALID_OPERATION,
   // the blit is dropped, and the shader then samples a stale texture.
   //
   // The alpha channel is load-bearing, not incidental: the distort shader computes
@@ -515,8 +516,7 @@ void Sprite3::distort_draw(SharedRenderState* render_state, ScopedProfilerNode& 
   glBindVertexArray(m_distort_ogl.vao);
 
   // Enable prim restart, we need this to break up the triangle strips
-  glEnable(GL_PRIMITIVE_RESTART);
-  glPrimitiveRestartIndex(UINT32_MAX);
+  enable_primitive_restart_u32();
 
   // Upload vertex data
   glBindBuffer(GL_ARRAY_BUFFER, m_distort_ogl.vertex_buffer);
@@ -612,6 +612,7 @@ void Sprite3::distort_draw_common(SharedRenderState* render_state, ScopedProfile
   glBindFramebuffer(GL_READ_FRAMEBUFFER, render_state->render_fb);
   glBindFramebuffer(GL_DRAW_FRAMEBUFFER, m_distort_ogl.fbo);
 
+  drain_gl_errors();
   glBlitFramebuffer(0,                          // srcX0
                     0,                          // srcY0
                     render_state->render_fb_w,  // srcX1
@@ -623,6 +624,7 @@ void Sprite3::distort_draw_common(SharedRenderState* render_state, ScopedProfile
                     GL_COLOR_BUFFER_BIT,        // mask
                     GL_NEAREST                  // filter
   );
+  blit_probe_report("Sprite3_Distort:distort_draw_common");
 
   glBindFramebuffer(GL_FRAMEBUFFER, render_state->render_fb);
 

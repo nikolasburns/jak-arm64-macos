@@ -43,7 +43,21 @@ struct SharedRenderState {
   bool use_occlusion_culling = true;
   math::Vector<u8, 4> fog_color = math::Vector<u8, 4>{0, 0, 0, 0};
   float fog_intensity = 1.f;
-  bool no_multidraw = false;
+
+  // Batch indexed draws with glMultiDrawElements, or issue them one at a time?
+  //
+  // Forced ON for ANGLE, and not a preference there. GLES 3.0 has no
+  // glMultiDrawElements, and this Metal context advertises none of the
+  // multi_draw extensions either (measured: zero of its 117 extensions), so the
+  // batched path has no implementation to reach. Worse, the bare symbol still
+  // *resolves* -- SDL falls through to AppleGL -- so taking that branch calls
+  // into a foreign GL implementation with an EGL context current and faults
+  // inside libGL.dylib, deep in whichever renderer drew first.
+  //
+  // The cost is per-draw call overhead only; the geometry and the index data are
+  // identical either way (setup_all_trees builds the single-draw index buffer
+  // when this is set).
+  bool no_multidraw = gfx_backend_is_angle();
 
   void reset();
   bool has_pc_data = false;

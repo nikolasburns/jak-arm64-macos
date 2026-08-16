@@ -4,6 +4,7 @@
 
 #include "game/graphics/opengl_renderer/background/background_common.h"
 #include "game/graphics/opengl_renderer/dma_helpers.h"
+#include "game/graphics/opengl_renderer/opengl_utils.h"
 
 #include "fmt/format.h"
 #include "third-party/imgui/imgui.h"
@@ -584,8 +585,7 @@ void Sprite3::flush_sprites(SharedRenderState* render_state,
                             bool double_draw) {
   glBindVertexArray(m_ogl.vao);
 
-  glEnable(GL_PRIMITIVE_RESTART);
-  glPrimitiveRestartIndex(UINT32_MAX);
+  enable_primitive_restart_u32();
 
   // upload vertex buffer
   glBindBuffer(GL_ARRAY_BUFFER, m_ogl.vertex_buffer);

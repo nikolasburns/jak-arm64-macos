@@ -983,7 +983,35 @@ void pc_set_vsync(u32 sym_val) {
 }
 
 void pc_set_msaa(int samples) {
-  Gfx::g_global_settings.msaa_samples = samples;
+  // GK_MSAA pins the sample count regardless of what the saved settings ask for.
+  //
+  // MSAA is the variable that separates a legal blit from an illegal one -- a
+  // multisample read is constrained far more tightly than a single-sampled one --
+  // so measuring across sample counts is routine here. The setting itself lives in
+  // the user's pc-settings.gc, which also holds their input bindings; sweeping it
+  // by editing that file means repeatedly rewriting user state and restoring it
+  // exactly, which session 4.1 did once and which is not worth doing twelve times.
+  //
+  // This is the single point every path reaches (GOAL calls pc-set-msaa on startup
+  // and on every settings change), so overriding here pins the value for the whole
+  // run without the settings file being touched at all.
+  static const int forced = []() {
+    const char* v = std::getenv("GK_MSAA");
+    if (!v || !v[0]) {
+      return 0;
+    }
+    const int n = std::atoi(v);
+    // Sample counts are powers of two; anything else is a typo, and silently
+    // running at an unintended count would misattribute every result from the run.
+    if (n < 1 || (n & (n - 1)) != 0) {
+      lg::error("GK_MSAA=\"{}\" is not a power of two; ignoring and using the saved setting", v);
+      return 0;
+    }
+    lg::info("GK_MSAA={}: overriding the saved msaa setting for this run", n);
+    return n;
+  }();
+
+  Gfx::g_global_settings.msaa_samples = forced ? forced : samples;
 }
 
 void pc_set_frame_rate(int rate) {

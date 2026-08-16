@@ -1,8 +1,6 @@
-#version 410 core
-
 layout (location = 0) in vec3 position_in;
 layout (location = 1) in vec3 tex_coord_in;
-layout (location = 2) in int time_of_day_index;
+layout (location = 2) in uvec2 time_of_day_index;
 layout (location = 3) in vec3 normal;
 layout (location = 4) in vec4 proto_tint;
 
@@ -12,7 +10,7 @@ uniform float fog_constant;
 uniform float fog_min;
 uniform float fog_max;
 uniform vec4 envmap_tod_tint;
-uniform sampler1D tex_T10; // note, sampled in the vertex shader on purpose.
+uniform sampler2D tex_T10; // note, sampled in the vertex shader on purpose.
 uniform int decal;
 
 out vec4 fragment_color;
@@ -25,7 +23,7 @@ uniform vec4 persp1;
 uniform mat4 cam_no_persp;
 
 void main() {
-  fogginess = 0;
+  fogginess = 0.0;
 
   // rotate the normal
   vec3 nrm_vf23 = cam_no_persp[0].xyz * normal.x
@@ -144,11 +142,11 @@ void main() {
   // correct xy offset
   transformed.xy -= (2048.);
   // correct z scale
-  transformed.z /= (8388608);
-  transformed.z -= 1;
+  transformed.z /= (8388608.0);
+  transformed.z -= 1.0;
   // correct xy scale
-  transformed.x /= (256);
-  transformed.y /= -(128);
+  transformed.x /= (256.0);
+  transformed.y /= -(128.0);
   // hack
   transformed.xyz *= transformed.w;
   // scissoring area adjust

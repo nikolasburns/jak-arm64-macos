@@ -1,5 +1,7 @@
 #include "Hfrag.h"
 
+#include "game/graphics/opengl_renderer/opengl_utils.h"
+
 #include "common/log/log.h"
 
 #include "third-party/imgui/imgui.h"
@@ -183,7 +185,7 @@ Hfrag::HfragLevel* Hfrag::get_hfrag_level(const std::string& name,
 void Hfrag::unload_hfrag_level(Hfrag::HfragLevel* lev) {
   ASSERT(lev->in_use);
   // delete OpenGL resources we created.
-  glBindTexture(GL_TEXTURE_1D, lev->time_of_day_texture);
+  glBindTexture(GL_TEXTURE_2D, lev->time_of_day_texture);
   glDeleteTextures(1, &lev->time_of_day_texture);
   glDeleteVertexArrays(1, &lev->vao);
 
@@ -255,11 +257,11 @@ void Hfrag::load_hfrag_level(const std::string& load_name,
   );
   glActiveTexture(GL_TEXTURE10);
   glGenTextures(1, &lev->time_of_day_texture);
-  glBindTexture(GL_TEXTURE_1D, lev->time_of_day_texture);
-  glTexImage1D(GL_TEXTURE_1D, 0, GL_RGBA, TIME_OF_DAY_COLOR_COUNT, 0, GL_RGBA,
-               GL_UNSIGNED_INT_8_8_8_8, nullptr);
-  glTexParameteri(GL_TEXTURE_1D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-  glTexParameteri(GL_TEXTURE_1D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+  glBindTexture(GL_TEXTURE_2D, lev->time_of_day_texture);
+  glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, TIME_OF_DAY_COLOR_COUNT, 1, 0, GL_RGBA,
+               GL_UNSIGNED_BYTE, nullptr);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
   glBindVertexArray(0);
 
   // montage
@@ -389,8 +391,8 @@ void Hfrag::render_hfrag_level(Hfrag::HfragLevel* lev,
   // generate time of day texture
   interp_time_of_day(pc_data.camera.itimes, lev->hfrag->time_of_day_colors, m_color_result.data());
   glActiveTexture(GL_TEXTURE10);
-  glBindTexture(GL_TEXTURE_1D, lev->time_of_day_texture);
-  glTexSubImage1D(GL_TEXTURE_1D, 0, 0, lev->num_colors, GL_RGBA, GL_UNSIGNED_INT_8_8_8_8_REV,
+  glBindTexture(GL_TEXTURE_2D, lev->time_of_day_texture);
+  glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, lev->num_colors, 1, GL_RGBA, GL_UNSIGNED_BYTE,
                   m_color_result.data());
 
   // initialize data
@@ -398,8 +400,7 @@ void Hfrag::render_hfrag_level(Hfrag::HfragLevel* lev,
   glBindBuffer(GL_ARRAY_BUFFER, lev->vertex_buffer);
   glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, lev->index_buffer);
   glActiveTexture(GL_TEXTURE0);
-  glEnable(GL_PRIMITIVE_RESTART);
-  glPrimitiveRestartIndex(UINT32_MAX);
+  enable_primitive_restart_u32();
 
   // set up shader
   first_tfrag_draw_setup(pc_data.camera, render_state, ShaderId::HFRAG);
@@ -438,8 +439,7 @@ void Hfrag::render_hfrag_montage_textures(Hfrag::HfragLevel* lev,
   glBindVertexArray(lev->montage_vao);
   glBindBuffer(GL_ARRAY_BUFFER, lev->montage_vertices);
   glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, m_montage_indices);
-  glEnable(GL_PRIMITIVE_RESTART);
-  glPrimitiveRestartIndex(UINT32_MAX);
+  enable_primitive_restart_u32();
   glDisable(GL_DEPTH_TEST);
   glDisable(GL_BLEND);
 

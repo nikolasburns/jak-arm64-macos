@@ -2,6 +2,8 @@
 
 #include <cfloat>
 
+#include "game/graphics/opengl_renderer/opengl_utils.h"
+
 #include "third-party/imgui/imgui.h"
 
 ShadowRenderer::ShadowRenderer(const std::string& name, int my_id) : BucketRenderer(name, my_id) {
@@ -383,9 +385,9 @@ void ShadowRenderer::draw(SharedRenderState* render_state, ScopedProfilerNode& p
       glUniform4f(
           glGetUniformLocation(render_state->shaders[ShaderId::SHADOW].id(), "color_uniform"), 0.0f,
           0.0f, 0.0f, 0.5f);
-      glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+      set_polygon_mode(GL_LINE);
       glDrawElements(GL_TRIANGLES, (m_next_front_index - 6), GL_UNSIGNED_INT, nullptr);
-      glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
+      set_polygon_mode(GL_FILL);
       glEnable(GL_BLEND);
     }
     prof.add_draw_call();
@@ -408,9 +410,9 @@ void ShadowRenderer::draw(SharedRenderState* render_state, ScopedProfilerNode& p
       glUniform4f(
           glGetUniformLocation(render_state->shaders[ShaderId::SHADOW].id(), "color_uniform"), 0.0f,
           0.0f, 0.0f, 0.5f);
-      glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+      set_polygon_mode(GL_LINE);
       glDrawElements(GL_TRIANGLES, (m_next_back_index - 0), GL_UNSIGNED_INT, nullptr);
-      glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
+      set_polygon_mode(GL_FILL);
       glEnable(GL_BLEND);
     }
 

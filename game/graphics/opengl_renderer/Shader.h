@@ -5,6 +5,48 @@
 #include "common/common_types.h"
 #include "common/versions/versions.h"
 
+// Which GL implementation the shader source is being prepared for.
+//
+// The on-disk shaders are written in the common subset of desktop GLSL 4.10 core
+// and OpenGL ES SL 3.00: they carry NO `#version` directive and no precision
+// qualifiers. The dialect-specific prologue is injected at load time by
+// Shader::Shader, so a single source tree serves both backends.
+enum class ShaderBackend {
+  AppleGL,  // desktop GL 4.10 core (the macOS system GL / oracle path)
+  Angle,    // OpenGL ES 3.0 via ANGLE-Metal
+};
+
+// The backend the shader loader targets, selected at runtime.
+//
+// DEFAULT IS AppleGL: absent an explicit request, every path behaves exactly as
+// it did before the ANGLE work, and no ANGLE artifact is loaded or referenced.
+//
+// Selection happens ONCE, before the display is created (gfx_backend_init), and
+// is immutable afterwards -- shaders are compiled against whichever dialect this
+// reports, so a mid-run change would invalidate every already-compiled program.
+ShaderBackend gfx_shader_backend();
+
+// Resolve the backend from the environment. Called once during graphics startup,
+// before any window/context exists. Returns the backend actually selected.
+//
+// GK_GFX_BACKEND=angle|applegl  (unset/unrecognized -> AppleGL)
+ShaderBackend gfx_backend_init();
+
+// True when the ANGLE (GLES 3.0) backend is active. Convenience for the call
+// sites that branch on dialect rather than on shader text.
+inline bool gfx_backend_is_angle() {
+  return gfx_shader_backend() == ShaderBackend::Angle;
+}
+
+// The dialect prologue prepended as line 1 of every shader loaded from disk.
+//
+// EVERY consumer of on-disk shader text must go through this, not just
+// ShaderLibrary: the shaders carry no `#version` of their own, so a compile site
+// that reads a .vert/.frag directly and skips the prologue fails with
+// "#version required and missing". The splash screen (GLDisplay::init_splash)
+// is such a site. Call this rather than rebuilding the prologue locally.
+std::string shader_prologue(ShaderBackend backend, bool is_fragment);
+
 class Shader {
  public:
   static constexpr char shader_folder[] = "game/graphics/opengl_renderer/shaders/";

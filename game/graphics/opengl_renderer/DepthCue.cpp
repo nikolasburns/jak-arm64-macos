@@ -1,6 +1,7 @@
 #include "DepthCue.h"
 
 #include "game/graphics/opengl_renderer/dma_helpers.h"
+#include "game/graphics/opengl_renderer/opengl_utils.h"
 
 #include "fmt/format.h"
 #include "third-party/imgui/imgui.h"
@@ -34,7 +35,7 @@ void DepthCue::opengl_setup() {
   glGenTextures(1, &m_ogl.framebuffer_sample_tex);
   glBindTexture(GL_TEXTURE_2D, m_ogl.framebuffer_sample_tex);
 
-  glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, 1, 1, 0, GL_RGB, GL_UNSIGNED_BYTE, NULL);
+  glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB8, 1, 1, 0, GL_RGB, GL_UNSIGNED_BYTE, NULL);
 
   glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
   glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
@@ -56,7 +57,7 @@ void DepthCue::opengl_setup() {
   glGenTextures(1, &m_ogl.fbo_texture);
   glBindTexture(GL_TEXTURE_2D, m_ogl.fbo_texture);
 
-  glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, 1, 1, 0, GL_RGB, GL_UNSIGNED_BYTE, NULL);
+  glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB8, 1, 1, 0, GL_RGB, GL_UNSIGNED_BYTE, NULL);
 
   glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
   glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
@@ -373,7 +374,7 @@ void DepthCue::setup(SharedRenderState* render_state, ScopedProfilerNode& /*prof
   m_ogl.framebuffer_sample_height = pc_fb_sample_height;
 
   glBindTexture(GL_TEXTURE_2D, m_ogl.framebuffer_sample_tex);
-  glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, pc_fb_sample_width, pc_fb_sample_height, 0, GL_RGB,
+  glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB8, pc_fb_sample_width, pc_fb_sample_height, 0, GL_RGB,
                GL_UNSIGNED_BYTE, NULL);
   glBindTexture(GL_TEXTURE_2D, 0);
 
@@ -398,7 +399,7 @@ void DepthCue::setup(SharedRenderState* render_state, ScopedProfilerNode& /*prof
   m_ogl.fbo_height = pc_depth_cue_fb_height;
 
   glBindTexture(GL_TEXTURE_2D, m_ogl.fbo_texture);
-  glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, pc_depth_cue_fb_width, pc_depth_cue_fb_height, 0, GL_RGB,
+  glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB8, pc_depth_cue_fb_width, pc_depth_cue_fb_height, 0, GL_RGB,
                GL_UNSIGNED_BYTE, NULL);
   glBindTexture(GL_TEXTURE_2D, 0);
 
@@ -537,6 +538,7 @@ void DepthCue::draw(SharedRenderState* render_state, ScopedProfilerNode& prof) {
   glBindFramebuffer(GL_READ_FRAMEBUFFER, render_state->render_fb);
   glBindFramebuffer(GL_DRAW_FRAMEBUFFER, m_ogl.framebuffer_sample_fbo);
 
+  drain_gl_errors();
   glBlitFramebuffer(render_state->draw_offset_x,                                // srcX0
                     render_state->draw_offset_y,                                // srcY0
                     render_state->draw_offset_x + render_state->draw_region_w,  // srcX1
@@ -548,6 +550,7 @@ void DepthCue::draw(SharedRenderState* render_state, ScopedProfilerNode& prof) {
                     GL_COLOR_BUFFER_BIT,                                        // mask
                     GL_NEAREST                                                  // filter
   );
+  blit_probe_report("DepthCue:framebuffer_sample");
 
   glBindFramebuffer(GL_FRAMEBUFFER, render_state->render_fb);
 
