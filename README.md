@@ -13,13 +13,11 @@ ARM64 directly and the runtime executes it.
 | ![Jak and Daxter title screen at sunset, pink and purple cloud layers over the ocean](docs/img/jak1-title.png) | ![Jak II title screen, Haven City at night](docs/img/jak2-title.png) | ![Jak 3 title screen, the logo over a desert canyon at dusk with cacti in the foreground](docs/img/jak3-title.png) |
 | <sub>Jak 1 title screen</sub> | <sub>Jak 2 title screen</sub> | <sub>Jak 3 title screen</sub> |
 
-That claim is audited, not asserted: see
-**[diag/native-audit.md](diag/native-audit.md)** for a nine-check verification
+See **[diag/native-audit.md](diag/native-audit.md)** for a verification 
 covering process translation flags, every mapped Mach-O image, live
 disassembly of JIT'd GOAL code in the running games, and the build artifacts —
 each with the command and its actual output. **All three games pass every
-check**; Jak 3 was re-audited separately, sampled live in active gameplay, and
-is not assumed to inherit the Jak 1 / Jak 2 result.
+check**.
 
 **Status**
 
@@ -27,7 +25,7 @@ is not assumed to inherit the Jak 1 / Jak 2 result.
 |---|---|
 | **Jak 1** | **Playable.** Beach, Forbidden Jungle, Sandover Village and Geyser Rock play. Full playthrough not yet validated. |
 | **Jak 2** | **Playable.** Full playthrough not yet validated. |
-| **Jak 3** | **Playable.** Boots into gameplay, pause menu and quit-to-menu work, sustained play sessions with no crash. Full playthrough not yet validated. |
+| **Jak 3** | **Playable.** Boots into gameplay. Full playthrough not yet validated. |
 
 ---
 
@@ -134,10 +132,6 @@ Notes from installing both:
 - **Expect a much bigger `fr3/` tree** for the full-world packs. Jak 1 grew
   201 MB → 2.1 GB (~10×); levels individually range from 4× to 20×. Budget disk
   accordingly. A HUD-only pack like Jak 3's is far cheaper — 868 MB → 901 MB.
-- **The texture pass is single-threaded.** `extract_level.cpp` forces
-  `num_workers = 1` whenever replacements are active, so this run cannot be
-  parallelised — but it is still fast (~30 s for Jak 1 on an M4 Pro).
-- **Strip editor residue** (`.png~`, `.svg`, `desktop.ini`) before extracting.
 - Remember the copy step below — the decompiler writes to `out/<game>/fr3`
   while the runtime reads `out/<game>-arm64/fr3`.
 
@@ -192,21 +186,15 @@ packaging — faster, but the result runs only on this machine:
 ./scripts/package-app.sh jak1 ~/Applications --no-bundle-deps
 ```
 
-The bundle embeds the game data, shaders, assets and every non-system dylib, and
-is ad-hoc signed with the JIT entitlement `gk` needs. Copy it to any Apple
-Silicon Mac and it runs; no build tree or Homebrew required. If Gatekeeper blocks
-the first launch, approve it in **System Settings → Privacy & Security** or run
-`xattr -dr com.apple.quarantine "/Applications/Jak 1.app"`. Don't launch it with
-`sudo`.
-
 Saves and settings live in `~/Library/Application Support/OpenGOAL/<game>/`,
 shared with the plain `gk` binary.
 
 Expect several gigabytes — roughly 3.7 GB for Jak 1, 9.6 GB for Jak 2, and
 ~6 GB for Jak 3 (whose HUD-only pack adds little) with
 the HD packs installed. Bundles are snapshots: re-run the script after any
-`(mi)` or asset change. They are **not** notarized and are not for distribution,
-since the embedded assets come from your own disc.
+`(mi)` or asset change. 
+
+**They are not notarized and are not for distribution, since the embedded assets come from your own disc.**
 
 ---
 
