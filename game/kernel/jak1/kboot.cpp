@@ -131,7 +131,64 @@ void KernelCheckAndDispatch() {
   }
   u64 symwatch_tick = 0;
 
+  // GK_FREEZE_AT_DISPATCH=<n>: from dispatch n onward, hold the game in pause mode.
+  //
+  // This exists to make an automated screenshot comparable across graphics backends.
+  // A frame number alone pins WHEN a capture happens, not WHAT is on screen (see
+  // screenshot.h): loading is paced by wall-clock I/O, so two runs reach the same
+  // frame index in different states, and even at identical game state the actors are
+  // at different points in their animation. Comparing there measures animation phase
+  // rather than rendering.
+  //
+  // Pausing fixes that at the source. *master-mode* = 'pause makes paused? true
+  // (main.gc), and display-frame-start gates every game clock on (not (paused?)) --
+  // base-frame-counter, part-frame-counter, integral-frame-counter and the rest all
+  // stop (drawable.gc). Since current-time IS base-frame-counter (display-h.gc),
+  // animation, particles, texture scroll and time-of-day all stop with it, while the
+  // renderer keeps drawing live frames from a fresh DMA chain each time. That is
+  // exactly the requirement: a still scene, still being rendered.
+  //
+  // Written every dispatch rather than once, because determine-pause-mode (drawable.gc)
+  // calls toggle-pause on controller input and on *pause-lock*, and a one-shot write
+  // would be silently undone. *cheat-mode* = 'camera suppresses the red PAUSE string
+  // that pause otherwise draws across the middle of the screen (main.gc), which would
+  // occlude the region being compared.
+  //
+  // Debug/automation only; does nothing unless the variable is set.
+  const char* freeze_env = getenv("GK_FREEZE_AT_DISPATCH");
+  const u64 freeze_at = freeze_env ? strtoull(freeze_env, nullptr, 0) : 0;
+  u64 dispatch_count = 0;
+  bool freeze_announced = false;
+  if (freeze_at) {
+    lg::info("GK_FREEZE_AT_DISPATCH: will hold pause mode from dispatch {}", freeze_at);
+  }
+
   while (MasterExit == RuntimeExitStatus::RUNNING) {
+    if (freeze_at && ++dispatch_count >= freeze_at) {
+      // Go through set-master-mode rather than writing *master-mode* directly.
+      //
+      // Writing the symbol alone does freeze the clocks -- paused? reads it, and
+      // display-frame-start gates base-frame-counter on paused?. But that is only half
+      // the freeze, and the missing half is visible: set-master-mode also sets the
+      // pause bit in *setting-control*'s process-mask, which apply-settings copies into
+      // *kernel-context* prevent-from-run, which is what makes execute-process-tree skip
+      // the actors themselves (gkernel.gc). Without it, any process whose :trans
+      // animates from its own state rather than from the frame counter keeps running --
+      // measured on jak1's title vista, where the windmill sails, the birds and the
+      // ocean surface all kept moving between two otherwise-identical captures while
+      // the camera and the rest of the scene held still.
+      //
+      // *cheat-mode* = 'camera suppresses the red PAUSE string that pause draws across
+      // the middle of the screen (main.gc), which would occlude the compared region.
+      intern_from_c("*cheat-mode*")->value = intern_from_c("camera")->value;
+      const auto set_master_mode = Ptr<Function>(*(intern_from_c("set-master-mode")).cast<u32>());
+      call_goal(set_master_mode, intern_from_c("pause")->value, 0, 0, s7.offset, g_ee_main_mem);
+      if (!freeze_announced) {
+        freeze_announced = true;
+        lg::info("GK_FREEZE_AT_DISPATCH: holding pause mode from dispatch {}", dispatch_count);
+      }
+    }
+
     if (!symwatch.empty() && (symwatch_tick++ % 120) == 0) {
       fprintf(stderr, "SYMWATCH tick %llu:", (unsigned long long)symwatch_tick);
       for (u32 off : symwatch) {

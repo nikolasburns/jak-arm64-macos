@@ -67,6 +67,28 @@ const HostTrigger& host_trigger() {
 std::string g_host_trigger_path;
 }  // namespace
 
+namespace {
+// GK_SCREENSHOT_AGAIN_AFTER=<n>: take a second capture n frames after the first,
+// writing "<path>.again.png". Both come from the same run, so comparing them
+// isolates whether the SCENE is holding still from whether two runs start in the
+// same state -- two different questions that a run-to-run comparison alone cannot
+// separate. Used to verify a freeze (GK_FREEZE_AT_DISPATCH) actually froze.
+int again_after() {
+  static const int n = []() {
+    const char* v = getenv("GK_SCREENSHOT_AGAIN_AFTER");
+    if (!v || !v[0]) {
+      return 0;
+    }
+    int parsed = atoi(v);
+    if (parsed > 0) {
+      lg::info("GK_SCREENSHOT_AGAIN_AFTER: second capture {} frames after the first", parsed);
+    }
+    return parsed > 0 ? parsed : 0;
+  }();
+  return n;
+}
+}  // namespace
+
 void screenshot_check_host_trigger() {
   const auto& trigger = host_trigger();
   if (trigger.target_frame <= 0) {
@@ -80,6 +102,10 @@ void screenshot_check_host_trigger() {
     g_host_trigger_path = trigger.path;
     g_want_screenshot = true;
     lg::info("GK_SCREENSHOT_AT_FRAME: requesting capture on frame {}", frame);
+  } else if (again_after() && frame == trigger.target_frame + again_after()) {
+    g_host_trigger_path = trigger.path.empty() ? "" : trigger.path + ".again.png";
+    g_want_screenshot = true;
+    lg::info("GK_SCREENSHOT_AGAIN_AFTER: requesting second capture on frame {}", frame);
   }
 }
 
