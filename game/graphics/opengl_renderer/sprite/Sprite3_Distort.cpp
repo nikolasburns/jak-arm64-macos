@@ -25,8 +25,14 @@ void Sprite3::opengl_setup_distort() {
   glGenTextures(1, &m_distort_ogl.fbo_texture);
   glBindTexture(GL_TEXTURE_2D, m_distort_ogl.fbo_texture);
 
-  glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB8, m_distort_ogl.fbo_width, m_distort_ogl.fbo_height, 0,
-               GL_RGB, GL_UNSIGNED_BYTE, NULL);
+  // GL_RGBA8, not GL_RGB8: distort_draw_common resolves the render framebuffer into
+  // this texture with glBlitFramebuffer, and at msaa != 1 that read is multisampled.
+  // A multisample resolve requires the source and destination color formats to MATCH
+  // -- an RGB8 destination against the RGBA8 render buffer is GL_INVALID_OPERATION,
+  // the blit is dropped, and the shader then samples a stale texture. See
+  // distort_setup_framebuffer_dims(), which must use the same format.
+  glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, m_distort_ogl.fbo_width, m_distort_ogl.fbo_height, 0,
+               GL_RGBA, GL_UNSIGNED_BYTE, NULL);
 
   glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
   glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
@@ -632,8 +638,9 @@ void Sprite3::distort_setup_framebuffer_dims(SharedRenderState* render_state) {
 
     glBindTexture(GL_TEXTURE_2D, m_distort_ogl.fbo_texture);
 
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB8, m_distort_ogl.fbo_width, m_distort_ogl.fbo_height, 0,
-                 GL_RGB, GL_UNSIGNED_BYTE, NULL);
+    // Must match the format chosen in opengl_setup_distort() -- see the note there.
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, m_distort_ogl.fbo_width, m_distort_ogl.fbo_height, 0,
+                 GL_RGBA, GL_UNSIGNED_BYTE, NULL);
 
     glBindTexture(GL_TEXTURE_2D, 0);
   }
