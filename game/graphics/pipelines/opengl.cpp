@@ -388,6 +388,45 @@ static std::shared_ptr<GfxDisplay> gl_make_display(int width,
       }
     }
     if (gfx_backend_is_angle()) {
+      // Bind the KHR_debug entry points by hand. They are core desktop GL 4.3, so glad
+      // files them under load_GL_VERSION_4_3, and that block never runs here: GLES
+      // reports itself as "3.0", so GLAD_GL_VERSION_4_3 is false and both pointers stay
+      // NULL. ANGLE does advertise GL_KHR_debug on the live context and exports the
+      // unsuffixed names, so resolving them individually is all that is needed -- the
+      // same shape as the glClearDepthf fix, and for the same reason.
+      //
+      // This is what gives the ANGLE path a GL error channel at all. Bind it before
+      // OpenGLRenderer's constructor, which is where the callback is installed.
+      if (!glad_glDebugMessageCallback) {
+        glad_glDebugMessageCallback = reinterpret_cast<PFNGLDEBUGMESSAGECALLBACKPROC>(
+            SDL_GL_GetProcAddress("glDebugMessageCallback"));
+      }
+      if (!glad_glDebugMessageControl) {
+        glad_glDebugMessageControl = reinterpret_cast<PFNGLDEBUGMESSAGECONTROLPROC>(
+            SDL_GL_GetProcAddress("glDebugMessageControl"));
+      }
+      // MEASURED, and the reason the warning below is unconditional: binding these is
+      // necessary but NOT sufficient. ANGLE only delivers debug messages on a context
+      // created with EGL_CONTEXT_OPENGL_DEBUG, and SDL's EGL path does not produce one
+      // here -- the live context reports GL_CONTEXT_FLAGS = 0x0 even though
+      // SDL_GL_CONTEXT_DEBUG_FLAG was requested. Proven end-to-end: an invalid glEnable
+      // sets glGetError = GL_INVALID_ENUM while the callback stays silent, and even
+      // glDebugMessageInsert is not delivered.
+      //
+      // So on this backend the callback is installed and inert. A quiet log is NOT
+      // evidence of a clean frame; use glGetError or MTL_DEBUG_LAYER=1 instead. See the
+      // GL DEBUG CHANNEL item in the work log.
+      if (glad_glDebugMessageCallback && glad_glDebugMessageControl) {
+        lg::warn(
+            "gfx backend ANGLE: KHR_debug entry points bound, but the context is not a debug "
+            "context (GL_CONTEXT_FLAGS=0) -- GL errors are NOT delivered to the callback and a "
+            "quiet log proves nothing");
+      } else {
+        lg::warn(
+            "gfx backend ANGLE: KHR_debug unavailable; GL errors will NOT be reported and a quiet "
+            "log proves nothing");
+      }
+
       // Flat-qualified varyings take their value from the PROVOKING vertex, and
       // the two APIs disagree on which that is: desktop GL defaults to the LAST
       // vertex of the primitive, GLES 3.0 is fixed to the FIRST. The shaders are
@@ -734,21 +773,38 @@ void render_game_frame(int game_width,
       options.msaa_samples = msaa_max;
     }
 
-    // MSAA is disabled on ANGLE: the resolve blit in do_pcrtc_effects faults inside
-    // ANGLE's Metal backend (AGXMetalG16X drawIndexedPrimitives, offset-from-null),
-    // and nothing renders at all when it does. Forcing 1 sample takes the
-    // resolve_buffer branch out of the frame entirely and gives a correct, if
-    // unantialiased, picture -- which is strictly better than no picture.
+    // MSAA is clamped to 1 on ANGLE. THE ORIGINAL REASON NO LONGER APPLIES and the
+    // current reason is different, so do not re-derive it from the commit message.
+    //
+    // It was installed because the resolve blit in do_pcrtc_effects crashed inside
+    // ANGLE's Metal backend. That crash was never MSAA's: it was the vertex-attribute
+    // type mismatch fixed in 66d3b8b6ce, and with that fix in place jak1 runs to
+    // village1 at msaa 4 on ANGLE, 3/3 runs, under MTL_DEBUG_LAYER=1 with the resolve
+    // buffer live and zero Metal assertions.
+    //
+    // What keeps the clamp is a DIFFERENT and backend-independent defect that a
+    // glGetError probe found once the dead debug callback was replaced: at msaa 4 the
+    // sprite-distort blit (Sprite3_Distort.cpp) reads the multisampled render FBO into
+    // a GL_RGB8 destination, and a resolve between mismatched colour formats is
+    // GL_INVALID_OPERATION. Measured on BOTH backends -- AppleGL 651 hits/boot, ANGLE
+    // 291 -- and clean at msaa 1 on both. It does not crash; the blit is simply
+    // dropped. AppleGL ships at msaa 4, so that one is live today.
+    //
+    // So this clamp now only hides a defect ANGLE shares with the shipping backend.
+    // Lift it as part of giving the distort FBO an RGBA8 format, not before -- that
+    // fix is owed to AppleGL too. See the MSAA / DISTORT BLIT item in the work log.
     //
     // Clamped here rather than at the settings source because this is the one point
     // every path funnels through, including the internal-res screenshot override
     // above, which sets msaa_samples independently of the global setting.
     //
-    // The single-sampled path is well-exercised on GLES: it is a plain texture
-    // attachment with no resolve step, and it is what jak2 shipped on during the
-    // call-site audit. Revisit if the resolve is fixed; see the MSAA RESOLVE item
-    // in the work log for the captured blit parameters.
-    if (gfx_backend_is_angle()) {
+    // GK_ANGLE_ALLOW_MSAA=1 lifts the clamp so the resolve can be re-measured without a
+    // rebuild. Diagnostic only; the default remains clamped.
+    static const bool angle_allow_msaa = []() {
+      const char* v = getenv("GK_ANGLE_ALLOW_MSAA");
+      return v && v[0] == '1';
+    }();
+    if (gfx_backend_is_angle() && !angle_allow_msaa) {
       options.msaa_samples = 1;
     }
 

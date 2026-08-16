@@ -75,16 +75,35 @@ OpenGLRenderer::OpenGLRenderer(std::shared_ptr<TexturePool> texture_pool,
     : m_render_state(texture_pool, loader, version),
       m_collide_renderer(version),
       m_version(version) {
-  // requires OpenGL 4.3
-#ifndef __APPLE__
-  // setup OpenGL errors
-  glEnable(GL_DEBUG_OUTPUT);
-  glDebugMessageCallback(opengl_error_callback, nullptr);
-  // disable specific errors
-  const GLuint gl_error_ignores_api_other[1] = {0x20071};  // some annoying nvidia message
-  glDebugMessageControl(GL_DEBUG_SOURCE_API, GL_DEBUG_TYPE_OTHER, GL_DONT_CARE, 1,
-                        &gl_error_ignores_api_other[0], GL_FALSE);
+  // Debug output needs desktop GL 4.3, which macOS does not have -- hence the __APPLE__
+  // guard. It is ALSO GL_KHR_debug, which the ANGLE-Metal context advertises, so the
+  // callback is installed there too.
+  //
+  // IT DOES NOT ACTUALLY DELIVER ON ANGLE, and that is measured, not assumed: SDL's EGL
+  // path does not create a debug context (GL_CONTEXT_FLAGS reads 0 despite
+  // SDL_GL_CONTEXT_DEBUG_FLAG being requested), and ANGLE drops every message on a
+  // non-debug context -- an invalid call raises glGetError but the callback never fires.
+  // It is registered anyway so it starts working the moment the context flag is fixed.
+  //
+  // The consequence matters more than the code: on ANGLE a log with no GL errors in it
+  // is not evidence of a clean frame. Reach for glGetError or MTL_DEBUG_LAYER=1.
+#if !defined(__APPLE__)
+  const bool enable_gl_debug_output = true;
+#else
+  const bool enable_gl_debug_output = gfx_backend_is_angle();
 #endif
+  // Both pointers are checked: on the ANGLE path they are bound by hand after the glad
+  // load (glad files them under GL 4.3, which a "3.0" GLES version string skips), and a
+  // null here would fault at pc=0 rather than degrade.
+  if (enable_gl_debug_output && glad_glDebugMessageCallback && glad_glDebugMessageControl) {
+    // setup OpenGL errors
+    glEnable(GL_DEBUG_OUTPUT);
+    glDebugMessageCallback(opengl_error_callback, nullptr);
+    // disable specific errors
+    const GLuint gl_error_ignores_api_other[1] = {0x20071};  // some annoying nvidia message
+    glDebugMessageControl(GL_DEBUG_SOURCE_API, GL_DEBUG_TYPE_OTHER, GL_DONT_CARE, 1,
+                          &gl_error_ignores_api_other[0], GL_FALSE);
+  }
 
   lg::info("OpenGL context version: {}", (const char*)glGetString(GL_VERSION));
   lg::info("OpenGL context renderer: {}", (const char*)glGetString(GL_RENDERER));
