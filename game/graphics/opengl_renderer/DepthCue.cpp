@@ -1,6 +1,7 @@
 #include "DepthCue.h"
 
 #include "game/graphics/opengl_renderer/dma_helpers.h"
+#include "game/graphics/opengl_renderer/opengl_utils.h"
 
 #include "fmt/format.h"
 #include "third-party/imgui/imgui.h"
@@ -537,6 +538,7 @@ void DepthCue::draw(SharedRenderState* render_state, ScopedProfilerNode& prof) {
   glBindFramebuffer(GL_READ_FRAMEBUFFER, render_state->render_fb);
   glBindFramebuffer(GL_DRAW_FRAMEBUFFER, m_ogl.framebuffer_sample_fbo);
 
+  drain_gl_errors();
   glBlitFramebuffer(render_state->draw_offset_x,                                // srcX0
                     render_state->draw_offset_y,                                // srcY0
                     render_state->draw_offset_x + render_state->draw_region_w,  // srcX1
@@ -548,6 +550,7 @@ void DepthCue::draw(SharedRenderState* render_state, ScopedProfilerNode& prof) {
                     GL_COLOR_BUFFER_BIT,                                        // mask
                     GL_NEAREST                                                  // filter
   );
+  blit_probe_report("DepthCue:framebuffer_sample");
 
   glBindFramebuffer(GL_FRAMEBUFFER, render_state->render_fb);
 

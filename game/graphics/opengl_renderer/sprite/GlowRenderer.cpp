@@ -546,6 +546,7 @@ void GlowRenderer::blit_depth(SharedRenderState* render_state) {
   glBindFramebuffer(GL_READ_FRAMEBUFFER, render_state->render_fb);
   glBindFramebuffer(GL_DRAW_FRAMEBUFFER, m_ogl.probe_fbo);
 
+  drain_gl_errors();
   glBlitFramebuffer(0,                          // srcX0
                     0,                          // srcY0
                     render_state->render_fb_w,  // srcX1
@@ -557,6 +558,7 @@ void GlowRenderer::blit_depth(SharedRenderState* render_state) {
                     GL_DEPTH_BUFFER_BIT,        // mask
                     GL_NEAREST                  // filter
   );
+  blit_probe_report("GlowRenderer:probe_depth");
 }
 
 void GlowRenderer::draw_debug_window() {

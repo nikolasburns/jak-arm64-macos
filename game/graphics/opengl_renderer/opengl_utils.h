@@ -119,6 +119,34 @@ inline void framebuffer_attach_color_texture(GLenum attachment, GLuint texture, 
 }
 
 /*!
+ * Report GL errors raised by a glBlitFramebuffer call, when GK_BLIT_PROBE=1.
+ *
+ * Every blit in this renderer that reads render_fb becomes a *multisample* read as
+ * soon as msaa > 1, and GLES 3.0 constrains those far more tightly than desktop GL
+ * does: source and destination formats must match exactly, and scaling is forbidden
+ * outright. A violation does not crash. glBlitFramebuffer sets GL_INVALID_OPERATION,
+ * copies nothing, and the consumer samples whatever was in the destination
+ * beforehand -- a stale frame, which looks like a rendering artifact rather than a
+ * dropped call. That is exactly how the distort defect hid on the shipping backend
+ * for a whole campaign.
+ *
+ * Two properties make this a measurement rather than a guess, and both are the
+ * reason it is a shared helper instead of a temporary printf:
+ *
+ *  - It DRAINS the error queue before the blit (drain_gl_errors, called by the
+ *    caller immediately before), so anything reported here is attributable to this
+ *    call and not to something that happened earlier in the frame.
+ *  - It reports the call site and the total call count, not just failures. A site
+ *    that never executed prints nothing, and "no output" from a site that never ran
+ *    is not a pass -- the count is what distinguishes the two.
+ *
+ * Off unless GK_BLIT_PROBE=1. Diagnostic instrument; no effect on rendering.
+ */
+bool blit_probe_enabled();
+void drain_gl_errors();
+void blit_probe_report(const char* site);
+
+/*!
  * This is a wrapper around a framebuffer and texture to make it easier to render to a texture.
  */
 class FramebufferTexturePair {

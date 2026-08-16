@@ -604,6 +604,7 @@ void Sprite3::distort_draw_common(SharedRenderState* render_state, ScopedProfile
   glBindFramebuffer(GL_READ_FRAMEBUFFER, render_state->render_fb);
   glBindFramebuffer(GL_DRAW_FRAMEBUFFER, m_distort_ogl.fbo);
 
+  drain_gl_errors();
   glBlitFramebuffer(0,                          // srcX0
                     0,                          // srcY0
                     render_state->render_fb_w,  // srcX1
@@ -615,6 +616,7 @@ void Sprite3::distort_draw_common(SharedRenderState* render_state, ScopedProfile
                     GL_COLOR_BUFFER_BIT,        // mask
                     GL_NEAREST                  // filter
   );
+  blit_probe_report("Sprite3_Distort:distort_draw_common");
 
   glBindFramebuffer(GL_FRAMEBUFFER, render_state->render_fb);
 

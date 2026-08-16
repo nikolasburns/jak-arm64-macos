@@ -10,6 +10,57 @@
 
 #include <SDL3/SDL_video.h>
 
+bool blit_probe_enabled() {
+  static const bool enabled = []() {
+    const char* v = std::getenv("GK_BLIT_PROBE");
+    const bool on = v && v[0] == '1';
+    if (on) {
+      lg::info("GK_BLIT_PROBE: reporting GL errors at every multisample-read blit site");
+    }
+    return on;
+  }();
+  return enabled;
+}
+
+void drain_gl_errors() {
+  if (!blit_probe_enabled()) {
+    return;
+  }
+  // Bounded: a context in a bad state can report an error every call, and this
+  // must not become an infinite loop inside the render path.
+  for (int i = 0; i < 64 && glGetError() != GL_NO_ERROR; ++i) {
+  }
+}
+
+void blit_probe_report(const char* site) {
+  if (!blit_probe_enabled()) {
+    return;
+  }
+  const GLenum err = glGetError();
+  // Per site: how many times it ran, and how many of those raised an error. The
+  // call count is load-bearing -- a site that never executes prints nothing at
+  // all, and silence from a site that never ran must not read as a clean pass.
+  struct Counts {
+    u64 calls = 0;
+    u64 errors = 0;
+    GLenum last = GL_NO_ERROR;
+  };
+  static std::map<std::string, Counts> s_counts;
+  auto& c = s_counts[site];
+  ++c.calls;
+  if (err != GL_NO_ERROR) {
+    ++c.errors;
+    // Log the first, then at decreasing frequency: a broken blit fires every
+    // frame and would otherwise bury the log in thousands of identical lines.
+    if (c.errors == 1 || c.errors % 100 == 0) {
+      lg::error("GK_BLIT_PROBE: {} raised 0x{:x} ({} of {} calls)", site, err, c.errors, c.calls);
+    }
+    c.last = err;
+  } else if (c.calls == 1) {
+    lg::info("GK_BLIT_PROBE: {} executed, clean", site);
+  }
+}
+
 void set_polygon_mode(GLenum mode) {
   if (!gfx_backend_is_angle()) {
     glPolygonMode(GL_FRONT_AND_BACK, mode);

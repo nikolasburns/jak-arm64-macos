@@ -10,6 +10,7 @@
 #include "game/graphics/opengl_renderer/EyeRenderer.h"
 #include "game/graphics/opengl_renderer/ProgressRenderer.h"
 #include "game/graphics/opengl_renderer/ShadowRenderer.h"
+#include "game/graphics/opengl_renderer/opengl_utils.h"
 #include "game/graphics/opengl_renderer/SkyRenderer.h"
 #include "game/graphics/opengl_renderer/TextureUploadHandler.h"
 #include "game/graphics/opengl_renderer/VisDataHandler.h"
@@ -1679,6 +1680,7 @@ void OpenGLRenderer::do_pcrtc_effects(float alp,
     // setup_frame(), and make_fbo() gives both GL_RGBA8. GL_NEAREST is also lossless
     // here precisely because the rects are 1:1 -- there is no filtering to do, only
     // the multisample resolve itself.
+    drain_gl_errors();
     glBlitFramebuffer(0,                                            // srcX0
                       0,                                            // srcY0
                       m_fbo_state.render_fbo->width,                // srcX1
@@ -1690,6 +1692,7 @@ void OpenGLRenderer::do_pcrtc_effects(float alp,
                       GL_COLOR_BUFFER_BIT,                          // mask
                       GL_NEAREST                                    // filter
     );
+    blit_probe_report("OpenGLRenderer:pcrtc_resolve");
     window_blit_src = &m_fbo_state.resources.resolve_buffer;
   } else {
     window_blit_src = &m_fbo_state.resources.render_buffer;
